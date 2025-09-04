@@ -1,0 +1,29 @@
+# Claude Code files
+CLAUDE.md
+
+# Claude Code temporary files
+.claude/
+.claude-*
+
+# VS Code settings (optional - uncomment if you want to ignore)
+# .vscode/
+
+# PowerShell execution policy and module cache
+*.psm1.cache
+*.psd1.cache
+
+# Windows image files and working directories
+*.wim
+*.esd
+*.iso
+Mount/
+Temp/
+WorkingDir/
+
+# Log files
+*.log
+logs/
+
+# Backup files
+*.bak
+*.backup
