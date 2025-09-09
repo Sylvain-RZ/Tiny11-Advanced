@@ -10,7 +10,7 @@ Tiny11 Advanced est un script PowerShell moderne qui crée des versions allégé
 
 **Crédits :**
 
-- [Scripts Tiny11 originaux](/ntdevlabs/tiny11builder) : Base d'inspiration
+- [Scripts Tiny11 originaux](https://github.com/ntdevlabs/tiny11builder) : Base d'inspiration
 - Communauté Windows : Méthodes d'optimisation
 
 **⚠️ Disclaimer :** Ce script modifie profondément Windows 11. Utilisez-le uniquement si vous comprenez les implications. Toujours tester en environnement sécurisé avant utilisation en production.
