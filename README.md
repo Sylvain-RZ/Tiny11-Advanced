@@ -4,7 +4,18 @@ Une solution pour créer des images Windows 11 allégées et optimisées.
 
 ## 📋 Description
 
-Tiny11 Advanced est un script PowerShell moderne qui crée des versions allégées de Windows 11 en supprimant les bloatwares, désactivant la télémétrie, et appliquant des optimisations avancées.
+**⚠️ Disclaimer : Script généré par IA, relecture humaine incomplète ;)**
+
+Tiny11 Advanced est un script PowerShell moderne qui crée des versions allégées de Windows 11 en supprimant les bloatwares, désactivant la télémétrie, et appliquant des optimisations avancées. Ce projet s'inspire des scripts Tiny11 originaux tout en apportant des fonctionnalités avancées. Il est conçu pour un usage éducatif et de test.
+
+**Crédits :**
+
+- [Scripts Tiny11 originaux](https://github.com/ntdevlabs/tiny11builder) : Base d'inspiration
+- Communauté Windows : Méthodes d'optimisation
+
+**⚠️ Disclaimer :** Ce script modifie profondément Windows 11. Utilisez-le uniquement si vous comprenez les implications. Toujours tester en environnement sécurisé avant utilisation en production.
+
+---
 
 ## ✨ Fonctionnalités principales
 
@@ -368,12 +379,9 @@ function Verb-Noun {
 
 ## 📄 Licence et crédits
 
-Ce projet s'inspire des scripts Tiny11 originaux tout en apportant une architecture moderne et des fonctionnalités avancées. Il est conçu pour un usage éducatif et de test.
+Ce projet s'inspire des scripts Tiny11 originaux tout en apportant des fonctionnalités avancées. Il est conçu pour un usage éducatif et de test.
 
 **Crédits :**
 - Scripts Tiny11 originaux : Base d'inspiration
 - Communauté Windows : Méthodes d'optimisation
 
----
-
-**⚠️ Disclaimer :** Ce script modifie profondément Windows 11. Utilisez-le uniquement si vous comprenez les implications. Toujours tester en environnement sécurisé avant utilisation en production.
