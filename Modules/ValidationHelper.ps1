@@ -129,7 +129,7 @@ function Test-SystemRequirements {
             Write-Log "PowerShell version $psVersion is not supported. Requires 5.1 or higher." -Level Error
         }
         else {
-            Write-Log "PowerShell version: $psVersion ✓" -Level Success
+            Write-Log "PowerShell version: $psVersion [OK]" -Level Success
         }
         
         # Check admin rights
@@ -140,7 +140,7 @@ function Test-SystemRequirements {
         $requirements.Details.AdminRights = $isAdmin
         
         if ($isAdmin) {
-            Write-Log "Administrator privileges: ✓" -Level Success
+            Write-Log "Administrator privileges: [OK]" -Level Success
         }
         else {
             Write-Log "Administrator privileges required but not present" -Level Error
@@ -154,7 +154,7 @@ function Test-SystemRequirements {
             $requirements.Details.FreeSpaceGB = $freeSpaceGB
             
             if ($freeSpaceGB -ge 25) {
-                Write-Log "Available disk space: $freeSpaceGB GB ✓" -Level Success
+                Write-Log "Available disk space: $freeSpaceGB GB [OK]" -Level Success
             }
             else {
                 $requirements.DiskSpace = $false
@@ -170,7 +170,7 @@ function Test-SystemRequirements {
         try {
             $dismPath = Get-Command dism.exe -ErrorAction Stop
             $requirements.Details.DismPath = $dismPath.Source
-            Write-Log "DISM available: $($dismPath.Source) ✓" -Level Success
+            Write-Log "DISM available: $($dismPath.Source) [OK]" -Level Success
         }
         catch {
             $requirements.DismAvailable = $false
@@ -180,7 +180,7 @@ function Test-SystemRequirements {
         # Check Windows ADK (optional)
         $adkPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit"
         if (Test-Path $adkPath) {
-            Write-Log "Windows ADK detected: $adkPath ✓" -Level Success
+            Write-Log "Windows ADK detected: $adkPath [OK]" -Level Success
             $requirements.Details.WindowsADK = $true
         }
         else {
@@ -192,15 +192,14 @@ function Test-SystemRequirements {
         $allRequirementsMet = $requirements.PowerShellVersion -and $requirements.AdminRights -and $requirements.DiskSpace -and $requirements.DismAvailable
         
         if ($allRequirementsMet) {
-            Write-Log "All system requirements met ✓" -Level Success
+            Write-Log "All system requirements met [OK]" -Level Success
         }
         else {
             Write-Log "Some system requirements not met" -Level Error
         }
         
         return $requirements
-    }
-    catch {
+    } catch {
         Write-Log "System requirements check failed: $($_.Exception.Message)" -Level Error
         return $requirements
     }
@@ -260,7 +259,7 @@ function Test-ImageIntegrity {
         $checkResult = & dism /English /CheckImageHealth "/ImageFile:$ImagePath"
         
         if ($LASTEXITCODE -eq 0) {
-            Write-Log "Image integrity test passed ✓" -Level Success
+            Write-Log "Image integrity test passed [OK]" -Level Success
             return $true
         }
         else {
@@ -292,7 +291,7 @@ function Test-MountedImages {
         $mountedImages = Get-WindowsImage -Mounted -ErrorAction SilentlyContinue
         
         if (-not $mountedImages) {
-            Write-Log "No mounted images found ✓" -Level Success
+            Write-Log "No mounted images found [OK]" -Level Success
             return $true
         }
         
