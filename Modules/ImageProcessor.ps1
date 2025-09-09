@@ -416,7 +416,7 @@ function Complete-ImageProcessing {
     try {
         # Perform final image cleanup
         Write-Log "Performing final image cleanup..." -Level Info
-        Repair-WindowsImage -Path $MountPath -StartComponentCleanup -ResetBase
+        & dism /English /Image:$MountPath /Cleanup-Image /StartComponentCleanup | Out-Null
         
         if ($LASTEXITCODE -ne 0) {
             Write-Log "Component cleanup failed, continuing anyway..." -Level Warning

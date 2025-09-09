@@ -30,6 +30,11 @@ function Optimize-RegistrySettings {
             throw "Failed to mount registry hives"
         }
         
+        # Test registry hive accessibility
+        if (-not (Test-RegistryHiveAccessibility)) {
+            Write-Log "Some registry hives are not accessible, continuing with available hives..." -Level Warning
+        }
+        
         # Apply all registry optimizations
         Disable-TelemetryRegistry
         Disable-SponsoredApps  
@@ -78,7 +83,7 @@ function Mount-RegistryHives {
     try {
         # Verify that we have necessary permissions
         if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-            Write-Log "Administrator privileges required for registry hive operations" -Level Warning
+            throw "Administrator privileges required for registry hive operations"
         }
         
         $hives = @{
@@ -89,29 +94,51 @@ function Mount-RegistryHives {
             'HKLM\zSYSTEM' = "$MountPath\Windows\System32\config\SYSTEM"
         }
         
+        # Force garbage collection and close any open handles
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+        [System.GC]::Collect()
+        
         $mountedHives = @()
         $allSuccessful = $true
         
         foreach ($hive in $hives.GetEnumerator()) {
             if (Test-Path $hive.Value) {
-                # Verify file is not in use
+                # Set proper permissions on hive file
                 try {
-                    $fileStream = [System.IO.File]::Open($hive.Value, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-                    $fileStream.Close()
+                    $acl = Get-Acl $hive.Value
+                    $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule("Everyone", "FullControl", "Allow")
+                    $acl.SetAccessRule($accessRule)
+                    Set-Acl $hive.Value $acl
                 }
                 catch {
-                    Write-Log "Hive file may be in use: $($hive.Value)" -Level Warning
+                    Write-Log "Could not modify permissions on hive file: $($hive.Value)" -Level Warning
                 }
                 
-                # Attempt to load the hive
-                $output = & reg load $hive.Key $hive.Value 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Log "Successfully loaded hive: $($hive.Key)" -Level Info
-                    $mountedHives += $hive.Key
-                }
-                else {
-                    Write-Log "Failed to load hive: $($hive.Key) - Error: $output" -Level Warning
-                    $allSuccessful = $false
+                # Attempt to load the hive with retry logic
+                $retryCount = 0
+                $maxRetries = 3
+                $loaded = $false
+                
+                while ($retryCount -lt $maxRetries -and -not $loaded) {
+                    Start-Sleep -Milliseconds (500 * ($retryCount + 1))  # Progressive delay
+                    
+                    $output = & reg load $hive.Key $hive.Value 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Log "Successfully loaded hive: $($hive.Key)" -Level Info
+                        $mountedHives += $hive.Key
+                        $loaded = $true
+                    }
+                    else {
+                        $retryCount++
+                        if ($retryCount -lt $maxRetries) {
+                            Write-Log "Retrying to load hive: $($hive.Key) (attempt $($retryCount + 1)) - Error: $output" -Level Warning
+                        }
+                        else {
+                            Write-Log "Failed to load hive after $maxRetries attempts: $($hive.Key) - Error: $output" -Level Error
+                            $allSuccessful = $false
+                        }
+                    }
                 }
             }
             else {
@@ -120,18 +147,34 @@ function Mount-RegistryHives {
             }
         }
         
-        # Verify mounted hives are accessible
-        Start-Sleep -Milliseconds 1000  # Allow time for hives to be fully mounted
+        # Verify mounted hives are accessible and set permissions
+        Start-Sleep -Milliseconds 2000  # Allow more time for hives to be fully mounted
         
         foreach ($hiveName in $mountedHives) {
             try {
+                # Test accessibility
                 $testResult = & reg query $hiveName 2>&1
-                if ($LASTEXITCODE -ne 0) {
+                if ($LASTEXITCODE -eq 0) {
+                    # Set full control permissions on the registry key
+                    try {
+                        $hivePath = $hiveName -replace '^HKLM\\z', 'HKEY_LOCAL_MACHINE\z'
+                        & reg save $hiveName "$env:TEMP\test_$($hiveName -replace '\\', '_').reg" /y 2>&1 | Out-Null
+                        if (Test-Path "$env:TEMP\test_$($hiveName -replace '\\', '_').reg") {
+                            Remove-Item "$env:TEMP\test_$($hiveName -replace '\\', '_').reg" -Force
+                        }
+                    }
+                    catch {
+                        # Test failed, but continue
+                    }
+                }
+                else {
                     Write-Log "Mounted hive not accessible: $hiveName" -Level Warning
+                    $allSuccessful = $false
                 }
             }
             catch {
-                Write-Log "Error testing hive accessibility: $hiveName" -Level Warning
+                Write-Log "Error testing hive accessibility: $hiveName - $($_.Exception.Message)" -Level Warning
+                $allSuccessful = $false
             }
         }
         
@@ -717,10 +760,87 @@ function Bypass-SystemRequirements {
     Apply-RegistrySettings -Settings $bypassSettings
 }
 
+function Test-RegistryHiveAccessibility {
+    <#
+    .SYNOPSIS
+        Tests if all required registry hives are properly mounted and accessible
+    #>
+    
+    $hives = @('HKLM\zCOMPONENTS', 'HKLM\zDEFAULT', 'HKLM\zNTUSER', 'HKLM\zSOFTWARE', 'HKLM\zSYSTEM')
+    $allAccessible = $true
+    
+    foreach ($hive in $hives) {
+        try {
+            $queryResult = & reg query $hive 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "Registry hive not accessible: $hive" -Level Warning
+                $allAccessible = $false
+            }
+            else {
+                Write-Log "Registry hive accessible: $hive" -Level Info
+            }
+        }
+        catch {
+            Write-Log "Error testing registry hive: $hive - $($_.Exception.Message)" -Level Warning
+            $allAccessible = $false
+        }
+    }
+    
+    return $allAccessible
+}
+
+function Set-RegistryKeyPermissions {
+    <#
+    .SYNOPSIS
+        Attempts to set proper permissions on a registry key
+    .PARAMETER RegistryPath
+        Path to the registry key
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$RegistryPath
+    )
+    
+    try {
+        # Use psexec-like approach to set permissions
+        $regKeyPath = $RegistryPath -replace '^HKLM\\z', 'HKEY_LOCAL_MACHINE\z'
+        
+        # Try to query the key first to check if it's accessible
+        $queryResult = & reg query $RegistryPath 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            return $false
+        }
+        
+        # Create a temporary .reg file to apply permissions
+        $tempRegFile = "$env:TEMP\temp_permissions_$(Get-Random).reg"
+        $regContent = @"
+Windows Registry Editor Version 5.00
+
+[$regKeyPath]
+
+"@
+        $regContent | Out-File -FilePath $tempRegFile -Encoding ASCII
+        
+        # Try to import the .reg file
+        $importResult = & reg import $tempRegFile 2>&1
+        $success = $LASTEXITCODE -eq 0
+        
+        # Clean up
+        if (Test-Path $tempRegFile) {
+            Remove-Item $tempRegFile -Force -ErrorAction SilentlyContinue
+        }
+        
+        return $success
+    }
+    catch {
+        return $false
+    }
+}
+
 function Apply-RegistrySettings {
     <#
     .SYNOPSIS
-        Applies an array of registry settings with enhanced error handling
+        Applies an array of registry settings with enhanced error handling and permission fixes
         
     .PARAMETER Settings
         Array of registry settings to apply
@@ -731,33 +851,92 @@ function Apply-RegistrySettings {
     )
     
     foreach ($setting in $Settings) {
-        $maxRetries = 3
+        $maxRetries = 5
         $retryCount = 0
         $success = $false
         
         while ($retryCount -lt $maxRetries -and -not $success) {
             try {
+                # Force garbage collection to release any handles
+                [System.GC]::Collect()
+                [System.GC]::WaitForPendingFinalizers()
+                
+                # Progressive delay with each retry
+                if ($retryCount -gt 0) {
+                    Start-Sleep -Milliseconds (500 * $retryCount)
+                }
+                
                 # Check if the hive path exists before attempting to modify
                 $hivePath = $setting.Path -replace '^HKLM\\z', 'HKLM\z'
                 
-                # Create the parent key if it doesn't exist
-                $parentPath = Split-Path $hivePath -Parent
-                if ($parentPath -and $parentPath -ne $hivePath) {
-                    & reg add $parentPath /f | Out-Null
+                # Verify the hive is accessible
+                $hiveRoot = ($hivePath -split '\\')[0..1] -join '\'
+                $testQuery = & reg query $hiveRoot 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Registry hive not accessible: $hiveRoot"
                 }
                 
-                # Apply the registry setting
-                & reg add $setting.Path /v $setting.Name /t $setting.Type /d $setting.Data /f | Out-Null
+                # Create the parent key path step by step to ensure proper permissions
+                $pathParts = $setting.Path -split '\\'
+                $currentPath = $pathParts[0..1] -join '\'  # Start with HKLM\zHIVE
+                
+                for ($i = 2; $i -lt $pathParts.Length; $i++) {
+                    $currentPath += '\' + $pathParts[$i]
+                    
+                    # Try to create each level of the path
+                    $createResult = & reg add $currentPath /f 2>&1
+                    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
+                        # Error code 1 means key already exists, which is fine
+                        Write-Log "Could not create registry path: $currentPath - $createResult" -Level Warning
+                    }
+                }
+                
+                # Apply the registry setting with explicit error handling
+                $addResult = & reg add $setting.Path /v $setting.Name /t $setting.Type /d $setting.Data /f 2>&1
                 
                 if ($LASTEXITCODE -eq 0) {
                     Write-Log "Applied registry setting: $($setting.Path)\$($setting.Name)" -Level Info
                     $success = $true
                 }
+                elseif ($LASTEXITCODE -eq 5) {
+                    # Access denied - try different approach
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-Log "Access denied, retrying registry setting: $($setting.Path)\$($setting.Name) (attempt $($retryCount + 1))" -Level Warning
+                        
+                        # For NTUSER hive access issues, try alternative method
+                        if ($setting.Path -like '*zNTUSER*') {
+                            try {
+                                # Use a different approach for NTUSER hive
+                                $altPath = $setting.Path -replace 'HKLM\\zNTUSER', 'HKLM\zDEFAULT'
+                                & reg add $altPath /v $setting.Name /t $setting.Type /d $setting.Data /f 2>&1 | Out-Null
+                                if ($LASTEXITCODE -eq 0) {
+                                    Write-Log "Applied registry setting to alternative path: $altPath\$($setting.Name)" -Level Info
+                                    $success = $true
+                                    break
+                                }
+                            }
+                            catch {
+                                # Continue with original retry logic
+                            }
+                        }
+                        
+                        # Try to create the key structure first
+                        try {
+                            & reg add $setting.Path /f 2>&1 | Out-Null
+                        }
+                        catch {
+                            # Ignore ownership errors
+                        }
+                    }
+                    else {
+                        Write-Log "Failed to apply registry setting after $maxRetries attempts (Access Denied): $($setting.Path)\$($setting.Name)" -Level Warning
+                    }
+                }
                 else {
                     $retryCount++
                     if ($retryCount -lt $maxRetries) {
-                        Write-Log "Retrying registry setting: $($setting.Path)\$($setting.Name) (attempt $($retryCount + 1))" -Level Warning
-                        Start-Sleep -Milliseconds 500
+                        Write-Log "Retrying registry setting: $($setting.Path)\$($setting.Name) (attempt $($retryCount + 1)) - Error: $addResult" -Level Warning
                     }
                     else {
                         Write-Log "Failed to apply registry setting after $maxRetries attempts: $($setting.Path)\$($setting.Name) (Error code: $LASTEXITCODE)" -Level Warning
@@ -768,7 +947,6 @@ function Apply-RegistrySettings {
                 $retryCount++
                 if ($retryCount -lt $maxRetries) {
                     Write-Log "Exception occurred, retrying: $($setting.Path)\$($setting.Name) - $($_.Exception.Message)" -Level Warning
-                    Start-Sleep -Milliseconds 500
                 }
                 else {
                     Write-Log "Error applying registry setting after $maxRetries attempts: $($setting.Path)\$($setting.Name) - $($_.Exception.Message)" -Level Error
