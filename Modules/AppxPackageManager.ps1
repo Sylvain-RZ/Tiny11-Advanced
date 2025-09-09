@@ -141,11 +141,19 @@ function Remove-SystemPackages {
         [Parameter(Mandatory)]
         [string]$MountPath,
         
-        [Parameter(Mandatory)]
-        [string]$LanguageCode
+        [Parameter(Mandatory = $false)]
+        [string]$LanguageCode = "en-US"
     )
     
     Write-Log "Starting system package removal process..." -Level Info
+    
+    # Validate LanguageCode parameter
+    if ([string]::IsNullOrEmpty($LanguageCode)) {
+        $LanguageCode = "en-US"
+        Write-Log "Language code was empty, defaulting to en-US" -Level Warning
+    }
+    
+    Write-Log "Using language code: $LanguageCode" -Level Info
     
     try {
         # Get system packages to remove

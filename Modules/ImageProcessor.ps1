@@ -92,6 +92,135 @@ function Copy-WindowsInstallationFiles {
     }
 }
 
+function Clear-DismMountPoints {
+    <#
+    .SYNOPSIS
+        Forcefully clears all DISM mount points and processes
+        
+    .PARAMETER MountPath
+        Specific mount path to clean (optional - if not provided, cleans all)
+    #>
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$MountPath
+    )
+    
+    Write-Log "Performing comprehensive DISM cleanup..." -Level Info
+    
+    try {
+        # Step 1: Clean up all mounted images
+        $mountedImages = Get-WindowsImage -Mounted -ErrorAction SilentlyContinue
+        
+        if ($mountedImages) {
+            foreach ($mount in $mountedImages) {
+                Write-Log "Force dismounting: $($mount.Path)" -Level Warning
+                try {
+                    Dismount-WindowsImage -Path $mount.Path -Discard -ErrorAction Stop
+                    Write-Log "Successfully dismounted: $($mount.Path)" -Level Success
+                }
+                catch {
+                    Write-Log "Failed to dismount $($mount.Path): $($_.Exception.Message)" -Level Warning
+                    
+                    # Force cleanup with dism.exe
+                    & dism /cleanup-wim
+                    & dism /cleanup-mountpoints
+                }
+            }
+        }
+        
+        # Step 2: Force DISM cleanup
+        Write-Log "Running DISM cleanup operations..." -Level Info
+        & dism /cleanup-wim
+        & dism /cleanup-mountpoints
+        
+        # Step 3: Kill any lingering DISM processes
+        $dismProcesses = Get-Process -Name "dism" -ErrorAction SilentlyContinue
+        if ($dismProcesses) {
+            Write-Log "Terminating DISM processes..." -Level Warning
+            $dismProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+        
+        # Step 4: Clear specific mount path if provided
+        if ($MountPath -and (Test-Path $MountPath)) {
+            Write-Log "Clearing mount directory: $MountPath" -Level Info
+            
+            # Try to detect file handles (optional - only if handle.exe is available)
+            $handlePath = Get-Command "handle.exe" -ErrorAction SilentlyContinue
+            if ($handlePath) {
+                Write-Log "Detecting file handles with handle.exe..." -Level Info
+                & handle.exe $MountPath -nobanner -accepteula 2>$null
+            }
+            else {
+                Write-Log "handle.exe not available, using alternative methods..." -Level Info
+                
+                # Alternative: Use Get-Process to find processes that might be using the directory
+                $processes = Get-Process | Where-Object {
+                    try {
+                        $_.Path -and $_.Path.StartsWith($MountPath)
+                    }
+                    catch {
+                        $false
+                    }
+                }
+                
+                if ($processes) {
+                    Write-Log "Found processes potentially using mount directory:" -Level Warning
+                    $processes | ForEach-Object {
+                        Write-Log "  - $($_.Name) (PID: $($_.Id))" -Level Warning
+                        try {
+                            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+                            Write-Log "    Terminated process $($_.Id)" -Level Info
+                        }
+                        catch {
+                            Write-Log "    Failed to terminate process $($_.Id)" -Level Warning
+                        }
+                    }
+                }
+            }
+            
+            # Wait a moment for processes to clean up
+            Start-Sleep -Seconds 3
+            
+            # Try to remove directory with multiple attempts
+            for ($i = 1; $i -le 5; $i++) {
+                try {
+                    Remove-Item -Path $MountPath -Recurse -Force -ErrorAction Stop
+                    Write-Log "Successfully cleared mount directory" -Level Success
+                    break
+                }
+                catch {
+                    Write-Log "Attempt $i to clear directory failed, retrying..." -Level Warning
+                    
+                    if ($i -eq 3) {
+                        # Try more aggressive permission changes on attempt 3
+                        Write-Log "Attempting permission reset..." -Level Info
+                        & takeown /F $MountPath /R /D Y 2>$null | Out-Null
+                        & icacls $MountPath /reset /T /C /Q 2>$null | Out-Null
+                        & icacls $MountPath /T /grant "Administrators:(F)" /C /Q 2>$null | Out-Null
+                    }
+                    elseif ($i -eq 5) {
+                        # Final attempt with robocopy to empty the directory
+                        Write-Log "Final attempt: using robocopy method..." -Level Warning
+                        $tempDir = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+                        & robocopy $tempDir.FullName $MountPath /MIR /R:1 /W:1 2>$null | Out-Null
+                        Remove-Item -Path $tempDir.FullName -Force -ErrorAction SilentlyContinue
+                        Remove-Item -Path $MountPath -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                    
+                    Start-Sleep -Seconds 2
+                }
+            }
+        }
+        
+        Write-Log "DISM cleanup completed" -Level Success
+        return $true
+    }
+    catch {
+        Write-Log "DISM cleanup failed: $($_.Exception.Message)" -Level Error
+        return $false
+    }
+}
+
 function Mount-WindowsImageAdvanced {
     <#
     .SYNOPSIS
@@ -120,21 +249,25 @@ function Mount-WindowsImageAdvanced {
     Write-Log "Mounting Windows image..." -Level Info
     
     try {
-        # Ensure mount directory exists and is empty
-        if (Test-Path $MountPath) {
-            # Check if anything is already mounted here
-            $mountedImages = Get-WindowsImage -Mounted
-            $existingMount = $mountedImages | Where-Object { $_.Path -eq $MountPath }
-            
-            if ($existingMount) {
-                Write-Log "Dismounting existing image from $MountPath" -Level Warning
-                Dismount-WindowsImage -Path $MountPath -Discard
+        # Comprehensive DISM cleanup before mounting
+        Clear-DismMountPoints -MountPath $MountPath
+        
+        # Additional cleanup - check if this specific image is already mounted
+        $existingMount = Get-WindowsImage -Mounted -ErrorAction SilentlyContinue | Where-Object { $_.ImagePath -eq $ImagePath }
+        if ($existingMount) {
+            Write-Log "Image is already mounted at $($existingMount.Path), force dismounting..." -Level Warning
+            try {
+                Dismount-WindowsImage -Path $existingMount.Path -Discard -ErrorAction Stop
+                Write-Log "Successfully force dismounted existing mount" -Level Info
             }
-            
-            # Clear the directory
-            Remove-Item -Path $MountPath -Recurse -Force -ErrorAction SilentlyContinue
+            catch {
+                Write-Log "Failed to dismount existing mount, trying DISM cleanup..." -Level Warning
+                & dism /cleanup-wim
+                & dism /cleanup-mountpoints
+            }
         }
         
+        # Ensure mount directory exists
         New-Item -ItemType Directory -Path $MountPath -Force | Out-Null
         
         # Get image information

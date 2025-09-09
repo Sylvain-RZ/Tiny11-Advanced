@@ -261,7 +261,8 @@ function Start-ProcessingWorkflow {
         # Step 4: Remove system packages (optional)
         if (-not $SkipSystemPackages) {
             Write-Log "Step 4/8: Removing system packages..." -Level Info
-            Remove-SystemPackages -MountPath $Global:ScratchDirectory -LanguageCode $imageInfo.Language
+            $languageCode = if ([string]::IsNullOrEmpty($imageInfo.Language)) { "en-US" } else { $imageInfo.Language }
+            Remove-SystemPackages -MountPath $Global:ScratchDirectory -LanguageCode $languageCode
         }
         else {
             Write-Log "Step 4/8: Skipping system packages removal" -Level Warning
@@ -270,7 +271,8 @@ function Start-ProcessingWorkflow {
         # Step 4b: Remove additional language packs (optional)
         if ($RemoveAdditionalLanguages) {
             Write-Log "Step 4b/8: Removing additional language packs..." -Level Info
-            Remove-AdditionalLanguagePacks -MountPath $Global:ScratchDirectory -PrimaryLanguage $imageInfo.Language
+            $primaryLanguage = if ([string]::IsNullOrEmpty($imageInfo.Language)) { "en-US" } else { $imageInfo.Language }
+            Remove-AdditionalLanguagePacks -MountPath $Global:ScratchDirectory -PrimaryLanguage $primaryLanguage
         }
         
         # Step 5: Apply registry optimizations
@@ -309,11 +311,8 @@ function Invoke-Cleanup {
     Write-Log "Performing cleanup..." -Level Info
     
     try {
-        # Dismount any mounted images
-        Get-WindowsImage -Mounted | ForEach-Object {
-            Write-Log "Dismounting image: $($_.ImagePath)" -Level Info
-            Dismount-WindowsImage -Path $_.Path -Discard -ErrorAction SilentlyContinue
-        }
+        # Use comprehensive DISM cleanup
+        Clear-DismMountPoints -MountPath $Global:ScratchDirectory
         
         # Remove working directories
         if (Test-Path $Global:ScratchDirectory) {
