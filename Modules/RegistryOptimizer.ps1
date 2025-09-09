@@ -538,6 +538,30 @@ function Enable-LocalAccountsOOBE {
             Name = 'BypassNRO'
             Type = 'REG_DWORD'
             Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+            Name = 'MSAOptional'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\OOBE'
+            Name = 'DisablePrivacyExperience'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\OOBE'
+            Name = 'DisableVoiceActivationTitleBar'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\OOBE'
+            Name = 'LaunchUserOOBE'
+            Type = 'REG_DWORD'
+            Data = '0'
         }
     )
     
