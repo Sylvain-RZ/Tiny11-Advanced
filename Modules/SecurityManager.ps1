@@ -15,8 +15,10 @@ function Disable-WindowsDefender {
         Disables Windows Defender without removing it from the system
         Allows user to re-enable it if needed
         
+        NOTE: This function assumes registry hives are already mounted by the main optimization process
+        
     .PARAMETER MountPath
-        Path to the mounted Windows image
+        Path to the mounted Windows image (for reference only - hives should be pre-mounted)
     #>
     param(
         [Parameter(Mandatory)]
@@ -27,39 +29,51 @@ function Disable-WindowsDefender {
     Write-Log "NOTE: Windows Defender can be re-enabled by the user after installation" -Level Info
     
     try {
-        # Load SYSTEM registry hive
-        & reg load HKLM\zSYSTEM "$MountPath\Windows\System32\config\SYSTEM" | Out-Null
+        # Check if SYSTEM hive is already mounted
+        $systemHiveAvailable = $false
+        try {
+            $null = & reg query "HKLM\zSYSTEM" 2>$null
+            $systemHiveAvailable = ($LASTEXITCODE -eq 0)
+        }
+        catch {
+            $systemHiveAvailable = $false
+        }
         
-        # Disable Windows Defender services (but don't remove them)
-        $defenderServices = @(
-            'WinDefend',        # Windows Defender Antivirus Service
-            'WdNisSvc',         # Windows Defender Antivirus Network Inspection Service
-            'WdNisDrv',         # Windows Defender Antivirus Network Inspection System Driver
-            'WdFilter',         # Windows Defender Antivirus Mini-Filter Driver
-            'Sense'             # Windows Defender Advanced Threat Protection Service
-        )
-        
-        foreach ($service in $defenderServices) {
-            try {
-                & reg add "HKLM\zSYSTEM\ControlSet001\Services\$service" /v Start /t REG_DWORD /d 4 /f | Out-Null
-                
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Log "Disabled Defender service: $service" -Level Info
+        if (-not $systemHiveAvailable) {
+            Write-Log "SYSTEM registry hive not available, skipping service configuration" -Level Warning
+        }
+        else {
+            # Disable Windows Defender services (but don't remove them)
+            $defenderServices = @(
+                'WinDefend',        # Windows Defender Antivirus Service
+                'WdNisSvc',         # Windows Defender Antivirus Network Inspection Service
+                'WdNisDrv',         # Windows Defender Antivirus Network Inspection System Driver
+                'WdFilter',         # Windows Defender Antivirus Mini-Filter Driver
+                'Sense'             # Windows Defender Advanced Threat Protection Service
+            )
+            
+            foreach ($service in $defenderServices) {
+                try {
+                    & reg add "HKLM\zSYSTEM\ControlSet001\Services\$service" /v Start /t REG_DWORD /d 4 /f 2>$null | Out-Null
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Log "Disabled Defender service: $service" -Level Info
+                    }
+                    else {
+                        Write-Log "Service not found: $service (may not exist in this version)" -Level Info
+                    }
                 }
-                else {
-                    Write-Log "Service not found: $service (may not exist in this version)" -Level Info
+                catch {
+                    Write-Log "Failed to disable service $service`: $($_.Exception.Message)" -Level Warning
                 }
-            }
-            catch {
-                Write-Log "Failed to disable service $service`: $($_.Exception.Message)" -Level Warning
             }
         }
         
         # Apply additional Defender policies without removing core files
-        Disable-DefenderPolicies -MountPath $MountPath
+        Disable-DefenderPolicies
         
         # Hide Windows Defender UI from Settings (but keep executable)
-        Hide-DefenderUISettings -MountPath $MountPath
+        Hide-DefenderUISettings
         
         Write-Log "Windows Defender disabled successfully (files preserved for reactivation)" -Level Success
         Write-Log "Users can re-enable Defender through Group Policy or Registry if needed" -Level Info
@@ -70,10 +84,6 @@ function Disable-WindowsDefender {
         Write-Log "Failed to disable Windows Defender: $($_.Exception.Message)" -Level Error
         return $false
     }
-    finally {
-        # Unload SYSTEM hive
-        & reg unload HKLM\zSYSTEM | Out-Null
-    }
 }
 
 function Disable-DefenderPolicies {
@@ -81,19 +91,27 @@ function Disable-DefenderPolicies {
     .SYNOPSIS
         Applies registry policies to disable Windows Defender functionality
         
-    .PARAMETER MountPath
-        Path to the mounted Windows image
+        NOTE: This function assumes SOFTWARE hive is already mounted by the main optimization process
     #>
-    param(
-        [Parameter(Mandatory)]
-        [string]$MountPath
-    )
+    param()
     
     Write-Log "Applying Windows Defender disable policies..." -Level Info
     
     try {
-        # Load SOFTWARE registry hive
-        & reg load HKLM\zSOFTWARE "$MountPath\Windows\System32\config\SOFTWARE" | Out-Null
+        # Check if SOFTWARE hive is already mounted
+        $softwareHiveAvailable = $false
+        try {
+            $null = & reg query "HKLM\zSOFTWARE" 2>$null
+            $softwareHiveAvailable = ($LASTEXITCODE -eq 0)
+        }
+        catch {
+            $softwareHiveAvailable = $false
+        }
+        
+        if (-not $softwareHiveAvailable) {
+            Write-Log "SOFTWARE registry hive not available, skipping policy configuration" -Level Warning
+            return $false
+        }
         
         # Policy settings to disable Defender features
         $defenderPolicies = @(
@@ -145,10 +163,10 @@ function Disable-DefenderPolicies {
         foreach ($policy in $defenderPolicies) {
             try {
                 # Create registry path if it doesn't exist
-                $null = & reg add $policy.Path /f | Out-Null
+                $null = & reg add $policy.Path /f 2>$null
                 
                 # Set the value
-                & reg add $policy.Path /v $policy.Name /t $policy.Type /d $policy.Data /f | Out-Null
+                & reg add $policy.Path /v $policy.Name /t $policy.Type /d $policy.Data /f 2>$null | Out-Null
                 
                 if ($LASTEXITCODE -eq 0) {
                     Write-Log "Applied Defender policy: $($policy.Name)" -Level Info
@@ -168,10 +186,6 @@ function Disable-DefenderPolicies {
         Write-Log "Failed to apply Defender policies: $($_.Exception.Message)" -Level Error
         return $false
     }
-    finally {
-        # Unload SOFTWARE hive
-        & reg unload HKLM\zSOFTWARE | Out-Null
-    }
 }
 
 function Hide-DefenderUISettings {
@@ -179,33 +193,41 @@ function Hide-DefenderUISettings {
     .SYNOPSIS
         Hides Windows Defender UI elements from Settings app
         
-    .PARAMETER MountPath
-        Path to the mounted Windows image
+        NOTE: This function assumes SOFTWARE hive is already mounted by the main optimization process
     #>
-    param(
-        [Parameter(Mandatory)]
-        [string]$MountPath
-    )
+    param()
     
     Write-Log "Hiding Windows Defender UI from Settings..." -Level Info
     
     try {
-        # Load SOFTWARE registry hive
-        & reg load HKLM\zSOFTWARE "$MountPath\Windows\System32\config\SOFTWARE" | Out-Null
+        # Check if SOFTWARE hive is already mounted
+        $softwareHiveAvailable = $false
+        try {
+            $null = & reg query "HKLM\zSOFTWARE" 2>$null
+            $softwareHiveAvailable = ($LASTEXITCODE -eq 0)
+        }
+        catch {
+            $softwareHiveAvailable = $false
+        }
         
-        # Hide Virus & threat protection and Windows Update from Settings
+        if (-not $softwareHiveAvailable) {
+            Write-Log "SOFTWARE registry hive not available, skipping UI hiding" -Level Warning
+            return $false
+        }
+        
+        # Hide Virus & threat protection from Settings (but preserve Windows Update)
         $uiSettings = @(
             @{
                 Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
                 Name = 'SettingsPageVisibility'
                 Type = 'REG_SZ'
-                Data = 'hide:virus;windowsupdate'
+                Data = 'hide:windowsdefender'
             }
         )
         
         foreach ($setting in $uiSettings) {
             try {
-                & reg add $setting.Path /v $setting.Name /t $setting.Type /d $setting.Data /f | Out-Null
+                & reg add $setting.Path /v $setting.Name /t $setting.Type /d $setting.Data /f 2>$null | Out-Null
                 
                 if ($LASTEXITCODE -eq 0) {
                     Write-Log "Applied UI setting: $($setting.Name)" -Level Info
@@ -222,10 +244,6 @@ function Hide-DefenderUISettings {
         Write-Log "Failed to hide Defender UI: $($_.Exception.Message)" -Level Error
         return $false
     }
-    finally {
-        # Unload SOFTWARE hive
-        & reg unload HKLM\zSOFTWARE | Out-Null
-    }
 }
 
 # NOTE: The Enable/Disable-WindowsDefender functions are provided in the standalone 
@@ -237,19 +255,27 @@ function Set-SecurityOptimizations {
     .SYNOPSIS
         Applies security-related optimizations while maintaining system integrity
         
-    .PARAMETER MountPath
-        Path to the mounted Windows image
+        NOTE: This function assumes SOFTWARE hive is already mounted by the main optimization process
     #>
-    param(
-        [Parameter(Mandatory)]
-        [string]$MountPath
-    )
+    param()
     
     Write-Log "Applying security optimizations..." -Level Info
     
     try {
-        # Load SOFTWARE registry hive
-        & reg load HKLM\zSOFTWARE "$MountPath\Windows\System32\config\SOFTWARE" | Out-Null
+        # Check if SOFTWARE hive is already mounted
+        $softwareHiveAvailable = $false
+        try {
+            $null = & reg query "HKLM\zSOFTWARE" 2>$null
+            $softwareHiveAvailable = ($LASTEXITCODE -eq 0)
+        }
+        catch {
+            $softwareHiveAvailable = $false
+        }
+        
+        if (-not $softwareHiveAvailable) {
+            Write-Log "SOFTWARE registry hive not available, skipping security optimizations" -Level Warning
+            return $false
+        }
         
         # Enhanced privacy and security settings
         $securitySettings = @(
@@ -293,10 +319,10 @@ function Set-SecurityOptimizations {
         foreach ($setting in $securitySettings) {
             try {
                 # Create path if it doesn't exist
-                $null = & reg add $setting.Path /f | Out-Null
+                $null = & reg add $setting.Path /f 2>$null
                 
                 # Apply setting
-                & reg add $setting.Path /v $setting.Name /t $setting.Type /d $setting.Data /f | Out-Null
+                & reg add $setting.Path /v $setting.Name /t $setting.Type /d $setting.Data /f 2>$null | Out-Null
                 
                 if ($LASTEXITCODE -eq 0) {
                     Write-Log "Applied security setting: $($setting.Name)" -Level Info
@@ -313,10 +339,6 @@ function Set-SecurityOptimizations {
     catch {
         Write-Log "Security optimizations failed: $($_.Exception.Message)" -Level Error
         return $false
-    }
-    finally {
-        # Unload SOFTWARE hive
-        & reg unload HKLM\zSOFTWARE | Out-Null
     }
 }
 
