@@ -41,9 +41,29 @@ function Test-WindowsInstallationSource {
         
         # Check for required files
         $requiredFiles = @(
-            "sources\boot.wim",
-            "boot\bootmgr"
+            "sources\boot.wim"
         )
+        
+        # Check for bootmgr in multiple possible locations (Windows 11 structure changes)
+        $bootmgrPaths = @(
+            "bootmgr",           # Modern Windows 11 location (root)
+            "boot\bootmgr"       # Legacy location
+        )
+        
+        $bootmgrFound = $false
+        foreach ($bootmgrPath in $bootmgrPaths) {
+            $fullBootmgrPath = Join-Path $Path $bootmgrPath
+            if (Test-Path $fullBootmgrPath) {
+                $bootmgrFound = $true
+                Write-Log "Found bootmgr at: $bootmgrPath" -Level Info
+                break
+            }
+        }
+        
+        if (-not $bootmgrFound) {
+            $result.Error = "bootmgr not found in expected locations: $($bootmgrPaths -join ', ')"
+            return $result
+        }
         
         foreach ($file in $requiredFiles) {
             $filePath = Join-Path $Path $file
