@@ -73,6 +73,57 @@ function Wait-ForProcessWithSkip {
     return $false  # Not skipped by user
 }
 
+function Wait-ForProcessNoTimeout {
+    <#
+    .SYNOPSIS
+        Waits for a process indefinitely with interactive skip capability only
+        
+    .PARAMETER Process
+        The process to wait for
+        
+    .PARAMETER TaskName
+        Name of the task for user messages
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [System.Diagnostics.Process]$Process,
+        
+        [Parameter(Mandatory)]
+        [string]$TaskName
+    )
+    
+    $startTime = Get-Date
+    $lastProgress = $startTime
+    
+    while (-not $Process.HasExited) {
+        $elapsed = (Get-Date) - $startTime
+        
+        # Show progress every 30 seconds
+        if (((Get-Date) - $lastProgress).TotalSeconds -ge 30) {
+            $elapsedMinutes = [math]::Floor($elapsed.TotalMinutes)
+            Write-Log "Still working on $TaskName... ${elapsedMinutes} minutes elapsed (Press 'S' to skip)" -Level Info
+            $lastProgress = Get-Date
+        }
+        
+        # Check for user input to skip
+        if ([System.Console]::KeyAvailable) {
+            $key = [System.Console]::ReadKey($true)
+            if ($key.Key -eq 'S' -or $key.Key -eq 's') {
+                Write-Log "User requested to skip $TaskName" -Level Info
+                if (-not $Process.HasExited) {
+                    $Process.Kill()
+                    $Process.WaitForExit(5000)  # Wait up to 5 seconds for graceful exit
+                }
+                return $true  # User skipped
+            }
+        }
+        
+        Start-Sleep -Milliseconds 500  # Check every 500ms
+    }
+    
+    return $false  # Not skipped by user
+}
+
 function Optimize-SystemSettings {
     <#
     .SYNOPSIS
@@ -395,25 +446,20 @@ function Optimize-WinSxSStore {
         # First, analyze current WinSxS size
         Write-Log "Analyzing WinSxS component store..." -Level Info
         Write-Log "This may take several minutes. Press 'S' to skip if it takes too long." -Level Info
+        Write-Log "DISM output will appear below. Wait for progress updates every 30 seconds..." -Level Info
         
-        # Run DISM with timeout and proper output handling
-        $dismProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/AnalyzeComponentStore" -PassThru -WindowStyle Hidden
+        # Run DISM with timeout and visible output for user feedback
+        $dismProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/AnalyzeComponentStore" -PassThru -NoNewWindow
         
-        # Wait for process completion with timeout and interactive skip (5 minutes)
-        $timeoutSeconds = 300
-        $skipped = Wait-ForProcessWithSkip -Process $dismProcess -TimeoutSeconds $timeoutSeconds -TaskName "WinSxS analysis"
+        # Wait for process completion without timeout (only user skip)
+        $skipped = Wait-ForProcessNoTimeout -Process $dismProcess -TaskName "WinSxS analysis"
         
         if ($skipped) {
             Write-Log "WinSxS optimization skipped by user" -Level Info
             return $true
         }
         
-        if (-not $dismProcess.HasExited) {
-            Write-Log "WinSxS analysis timed out after $timeoutSeconds seconds, killing process..." -Level Warning
-            $dismProcess.Kill()
-            Write-Log "Skipping WinSxS optimization due to timeout" -Level Warning
-            return $false
-        }
+        # Process should be finished since Wait-ForProcessNoTimeout only returns when done or skipped
         
         if ($dismProcess.ExitCode -ne 0) {
             Write-Log "WinSxS analysis failed (Exit code: $($dismProcess.ExitCode)), skipping optimization" -Level Warning
@@ -423,23 +469,19 @@ function Optimize-WinSxSStore {
         # Perform standard component cleanup
         Write-Log "Performing standard component cleanup..." -Level Info
         Write-Log "This is the longest step. Press 'S' to skip if it takes too long." -Level Info
-        $cleanupProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/StartComponentCleanup" -PassThru -WindowStyle Hidden
+        Write-Log "DISM cleanup in progress. Progress updates will appear every 30 seconds..." -Level Info
+        $cleanupProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/StartComponentCleanup" -PassThru -NoNewWindow
         
-        # Wait for cleanup completion with timeout and interactive skip (10 minutes)
-        $cleanupTimeoutSeconds = 600
-        $skipped = Wait-ForProcessWithSkip -Process $cleanupProcess -TimeoutSeconds $cleanupTimeoutSeconds -TaskName "component cleanup"
+        # Wait for cleanup completion without timeout (only user skip)
+        $skipped = Wait-ForProcessNoTimeout -Process $cleanupProcess -TaskName "component cleanup"
         
         if ($skipped) {
             Write-Log "WinSxS cleanup skipped by user during component cleanup" -Level Info
             return $true
         }
         
-        if (-not $cleanupProcess.HasExited) {
-            Write-Log "Component cleanup timed out after $cleanupTimeoutSeconds seconds, killing process..." -Level Warning
-            $cleanupProcess.Kill()
-            Write-Log "Standard component cleanup was killed due to timeout" -Level Warning
-        }
-        elseif ($cleanupProcess.ExitCode -ne 0) {
+        # Process should be finished since Wait-ForProcessNoTimeout only returns when done or skipped
+        if ($cleanupProcess.ExitCode -ne 0) {
             Write-Log "Standard component cleanup failed (Exit code: $($cleanupProcess.ExitCode))" -Level Warning
         }
         else {
@@ -470,18 +512,15 @@ function Optimize-WinSxSStore {
         
         # Final analysis to show space savings
         Write-Log "Performing final WinSxS analysis..." -Level Info
-        $finalAnalysisProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/AnalyzeComponentStore" -PassThru -WindowStyle Hidden
+        $finalAnalysisProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/AnalyzeComponentStore" -PassThru -NoNewWindow
         
-        # Wait for final analysis with timeout and interactive skip (5 minutes)
-        $skipped = Wait-ForProcessWithSkip -Process $finalAnalysisProcess -TimeoutSeconds $timeoutSeconds -TaskName "final analysis"
+        # Wait for final analysis without timeout (only user skip)
+        $skipped = Wait-ForProcessNoTimeout -Process $finalAnalysisProcess -TaskName "final analysis"
         
         if ($skipped) {
             Write-Log "Final analysis skipped by user" -Level Info
         }
-        elseif (-not $finalAnalysisProcess.HasExited) {
-            Write-Log "Final WinSxS analysis timed out after $timeoutSeconds seconds, killing process..." -Level Warning
-            $finalAnalysisProcess.Kill()
-        }
+        # Process should be finished since Wait-ForProcessNoTimeout only returns when done or skipped
         
         return $true
     }
