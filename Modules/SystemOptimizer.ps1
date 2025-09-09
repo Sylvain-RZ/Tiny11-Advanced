@@ -296,19 +296,27 @@ function Optimize-WinSxSStore {
             Write-Log "Standard component cleanup completed" -Level Success
         }
         
-        # Advanced cleanup with ResetBase (WARNING: This is irreversible)
-        Write-Log "Performing advanced component cleanup with ResetBase..." -Level Warning
-        Write-Log "This operation is irreversible and will prevent future component installation" -Level Warning
+        # Advanced cleanup with ResetBase - DÉSACTIVÉ PAR DÉFAUT
+        # IMPORTANT: ResetBase empêche l'installation des packs de langues
+        # Cette fonctionnalité va à l'encontre de l'usage normal de Windows
+        Write-Log "Skipping ResetBase cleanup to preserve language pack installation capability" -Level Info
+        Write-Log "Standard cleanup provides sufficient space reduction while maintaining system serviceability" -Level Info
         
+        # Pour les utilisateurs avancés qui veulent quand même utiliser ResetBase,
+        # décommenter les lignes ci-dessous EN CONNAISSANCE DE CAUSE :
+        <#
+        Write-Log "Performing advanced component cleanup with ResetBase..." -Level Warning
+        Write-Log "WARNING: This will prevent installation of language packs and new components" -Level Warning
         & dism /Image:$MountPath /Cleanup-Image /StartComponentCleanup /ResetBase | Out-Null
         
         if ($LASTEXITCODE -eq 0) {
             Write-Log "Advanced WinSxS cleanup completed successfully" -Level Success
-            Write-Log "WARNING: This image cannot be serviced for updates or language packs" -Level Warning
+            Write-Log "WARNING: This image cannot install language packs or new Windows components" -Level Warning
         }
         else {
             Write-Log "Advanced WinSxS cleanup failed (Exit code: $LASTEXITCODE)" -Level Warning
         }
+        #>
         
         # Final analysis to show space savings
         Write-Log "Performing final WinSxS analysis..." -Level Info

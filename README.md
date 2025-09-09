@@ -52,6 +52,17 @@ Tiny11Advanced/
 - DISM (Deployment Image Servicing and Management)
 - Support d'installation Windows 11 (ISO/DVD/USB)
 
+### Autoriser l'exécution de scripts PowerShell
+
+Avant d'utiliser le script, vous devez autoriser l'exécution de scripts PowerShell sur votre système :
+
+```powershell
+# Commande à exécuter une seule fois en tant qu'administrateur pour autoriser les scripts
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+Cette commande autorise l'exécution de scripts PowerShell locaux et distants signés pour l'utilisateur actuel.
+
 ### Utilisation basique
 
 ```powershell
@@ -72,12 +83,13 @@ Tiny11Advanced/
 | `-EnableDotNet35` | Active .NET Framework 3.5 | `-EnableDotNet35` |
 | `-DisableDefender` | Désactive Windows Defender | `-DisableDefender` |
 | `-SkipSystemPackages` | Ignore les packages système | `-SkipSystemPackages` |
+| `-RemoveAdditionalLanguages` | Supprime les packs de langues additionnels | `-RemoveAdditionalLanguages` |
 
 ### Exemples d'utilisation
 
 ```powershell
 # Configuration complète avec toutes les optimisations
-.\Tiny11Advanced.ps1 -SourcePath "D:" -OutputPath "C:\Output" -EnableDotNet35 -DisableDefender
+.\Tiny11Advanced.ps1 -SourcePath "D:" -OutputPath "C:\Output" -EnableDotNet35 -DisableDefender -RemoveAdditionalLanguages
 
 # Traitement rapide en conservant les packages système
 .\Tiny11Advanced.ps1 -SourcePath "E:" -SkipSystemPackages
@@ -124,6 +136,12 @@ Le projet utilise une architecture modulaire pour une maintenance optimale :
 - Fonctionnalités linguistiques optionnelles
 - Contenu de fond d'écran étendu
 
+**Packs de langues additionnels (optionnel) :**
+- Suppression des langues non-primaires de l'image
+- Préservation de la langue système principale
+- Capacité d'installation post-déploiement maintenue
+- Réduction significative de la taille de l'image
+
 ### Optimisations registre
 
 **Télémétrie et confidentialité :**
@@ -159,8 +177,8 @@ Le projet utilise une architecture modulaire pour une maintenance optimale :
 
 **WinSxS optimisé :**
 - Nettoyage standard avec `/StartComponentCleanup`
-- Nettoyage avancé avec `/ResetBase` (irréversible)
-- Réduction de 40-60% de la taille potentielle
+- Nettoyage avancé `/ResetBase` désactivé par défaut (préservation packs de langues)
+- Réduction de taille optimisée tout en conservant la servicibilité
 
 ## 🛡️ Gestion de Windows Defender
 
@@ -206,10 +224,11 @@ Le script de réactivation :
 ## ⚠️ Avertissements et précautions
 
 ### Importantes limitations
-- **Le nettoyage WinSxS avec ResetBase est irréversible**
-- **L'image ne peut pas être mise à jour ou recevoir de packs de langues après**
+- **ResetBase désactivé par défaut** : pour préserver l'installation des packs de langues
+- **Windows Update pleinement fonctionnel** : mises à jour de sécurité, pilotes et correctifs
+- **Installation de packs de langues préservée** : les utilisateurs peuvent ajouter des langues
 - **Certains services peuvent être requis pour des fonctionnalités spécifiques**
-- **Les mises à jour Windows peuvent restaurer certaines fonctionnalités**
+- **Les mises à jour Windows peuvent restaurer certaines fonctionnalités supprimées**
 
 ### Précautions recommandées
 1. **Toujours créer un point de restauration** avant l'application
@@ -336,7 +355,7 @@ function Verb-Noun {
 - Interface utilisateur moderne avec bannières colorées
 - Validation complète des sources et tests d'intégrité
 - Méthodes anti-réinstallation renforcées (UScheduler + BlockedOobeUpdaters)
-- Optimisation WinSxS avancée avec ResetBase
+- Optimisation WinSxS préservant l'installation des packs de langues
 - Support conversion ESD vers WIM automatique
 
 ### Idées de fonctionnalités

@@ -221,5 +221,72 @@ function Get-SystemPackagePatterns {
     )
 }
 
+function Remove-AdditionalLanguagePacks {
+    <#
+    .SYNOPSIS
+        Removes additional language packs from the image while preserving the primary language
+    .DESCRIPTION
+        This function removes language packs that are not the system's primary language,
+        reducing image size while maintaining the ability to install language packs post-deployment.
+        The primary system language is always preserved.
+    .PARAMETER MountPath
+        Path to the mounted Windows image
+    .PARAMETER PrimaryLanguage
+        Primary language code to preserve (e.g., "en-US", "fr-FR")
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$MountPath,
+        
+        [Parameter(Mandatory)]
+        [string]$PrimaryLanguage
+    )
+    
+    Write-Log "Starting removal of additional language packs (preserving $PrimaryLanguage)..." -Level Info
+    
+    try {
+        # Get all installed language packs
+        $langPacks = & dism /Image:$MountPath /Get-Packages | Where-Object { $_ -match "Language Pack" }
+        
+        if (-not $langPacks) {
+            Write-Log "No additional language packs found to remove" -Level Info
+            return $true
+        }
+        
+        $removedCount = 0
+        foreach ($pack in $langPacks) {
+            # Extract package name
+            if ($pack -match "Package Identity : (.+)") {
+                $packageName = $Matches[1].Trim()
+                
+                # Skip if it's the primary language pack
+                if ($packageName -match $PrimaryLanguage) {
+                    Write-Log "Preserving primary language pack: $packageName" -Level Info
+                    continue
+                }
+                
+                # Remove non-primary language pack
+                Write-Log "Removing language pack: $packageName" -Level Info
+                & dism /Image:$MountPath /Remove-Package /PackageName:$packageName /Quiet
+                
+                if ($LASTEXITCODE -eq 0) {
+                    $removedCount++
+                    Write-Log "Successfully removed: $packageName" -Level Success
+                } else {
+                    Write-Log "Failed to remove: $packageName" -Level Warning
+                }
+            }
+        }
+        
+        Write-Log "Removed $removedCount additional language packs" -Level Success
+        Write-Log "Primary language ($PrimaryLanguage) and installation capability preserved" -Level Info
+        return $true
+    }
+    catch {
+        Write-Log "Error during language pack removal: $($_.Exception.Message)" -Level Error
+        return $false
+    }
+}
+
 # NOTE: Remove-EdgeBrowser and Remove-OneDrive functions have been moved
 # to SystemOptimizer.ps1 for better organization (system optimizations vs package management)

@@ -27,9 +27,12 @@
     
 .PARAMETER SkipSystemPackages
     Skip removal of system packages for faster processing
+
+.PARAMETER RemoveAdditionalLanguages
+    Remove additional language packs while preserving primary language
     
 .EXAMPLE
-    .\Tiny11Advanced.ps1 -SourcePath "D:" -EnableDotNet35 -DisableDefender
+    .\Tiny11Advanced.ps1 -SourcePath "D:" -EnableDotNet35 -DisableDefender -RemoveAdditionalLanguages
     
 .NOTES
     Version: 1.0
@@ -65,7 +68,10 @@ param(
     [switch]$DisableDefender,
     
     [Parameter(Mandatory = $false)]
-    [switch]$SkipSystemPackages
+    [switch]$SkipSystemPackages,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$RemoveAdditionalLanguages
 )
 
 # Import required modules with dependency management
@@ -258,6 +264,12 @@ function Start-ProcessingWorkflow {
         }
         else {
             Write-Log "Step 4/8: Skipping system packages removal" -Level Warning
+        }
+        
+        # Step 4b: Remove additional language packs (optional)
+        if ($RemoveAdditionalLanguages) {
+            Write-Log "Step 4b/8: Removing additional language packs..." -Level Info
+            Remove-AdditionalLanguagePacks -MountPath $Global:ScratchDirectory -PrimaryLanguage $imageInfo.Language
         }
         
         # Step 5: Apply registry optimizations
