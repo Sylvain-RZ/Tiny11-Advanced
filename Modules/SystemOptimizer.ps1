@@ -257,7 +257,8 @@ function Get-SystemArchitecture {
 function Disable-TelemetryServices {
     <#
     .SYNOPSIS
-        Disables telemetry-related services without breaking system functionality
+        Disables telemetry-related services for Windows 11 24H2 without breaking system functionality
+        Updated with improved permission handling and Windows 11 24H2 service compatibility
         
     .PARAMETER MountPath
         Path to the mounted Windows image
@@ -267,41 +268,139 @@ function Disable-TelemetryServices {
         [string]$MountPath
     )
     
-    Write-Log "Disabling telemetry services..." -Level Info
+    Write-Log "Disabling telemetry services for Windows 11 24H2..." -Level Info
     
     try {
-        # Load SYSTEM hive if not already loaded
-        & reg load HKLM\zSYSTEM "$MountPath\Windows\System32\config\SYSTEM" | Out-Null
+        # Enhanced SYSTEM hive loading with permission handling
+        $systemHivePath = "$MountPath\Windows\System32\config\SYSTEM"
+        if (-not (Test-Path $systemHivePath)) {
+            Write-Log "SYSTEM hive not found at $systemHivePath" -Level Error
+            return $false
+        }
         
-        # Services to disable
-        $servicesToDisable = @(
-            'DiagTrack',                                    # Connected User Experiences and Telemetry
-            'dmwappushservice',                             # WAP Push Message Routing Service
-            'MapsBroker',                                   # Downloaded Maps Manager
-            'diagnosticshub.standardcollector.service',    # Microsoft Diagnostics Hub Standard Collector Service
-            'DPS',                                          # Diagnostic Policy Service
-            'WdiServiceHost',                               # Diagnostic Service Host
-            'WdiSystemHost',                                # Diagnostic System Host
-            'pcasvc'                                        # Program Compatibility Assistant Service
-        )
+        # Force unload any existing hive to prevent conflicts
+        & reg unload HKLM\zSYSTEM 2>&1 | Out-Null
+        Start-Sleep -Seconds 1
         
-        foreach ($service in $servicesToDisable) {
-            try {
-                & reg add "HKLM\zSYSTEM\ControlSet001\Services\$service" /v Start /t REG_DWORD /d 4 /f | Out-Null
-                
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Log "Disabled service: $service" -Level Info
-                }
-                else {
-                    Write-Log "Service not found: $service (may not exist in this version)" -Level Info
-                }
-            }
-            catch {
-                Write-Log "Failed to disable service $service`: $($_.Exception.Message)" -Level Warning
+        Write-Log "Loading SYSTEM hive for service configuration..." -Level Info
+        $loadResult = & reg load HKLM\zSYSTEM "$systemHivePath" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log "Failed to load SYSTEM hive, attempting permission fix..." -Level Warning
+            # Try to fix permissions
+            & takeown /f "$systemHivePath" /a 2>&1 | Out-Null
+            & icacls "$systemHivePath" /grant "Administrators:(F)" 2>&1 | Out-Null
+            
+            $loadResult = & reg load HKLM\zSYSTEM "$systemHivePath" 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "Failed to load SYSTEM hive after permission fix: $loadResult" -Level Error
+                return $false
             }
         }
         
-        Write-Log "Telemetry services disabled successfully" -Level Success
+        # Wait for hive to be fully loaded
+        Start-Sleep -Seconds 2
+        
+        # Updated services list for Windows 11 24H2 (removed obsolete services)
+        $servicesToDisable = @(
+            'DiagTrack',                                    # Connected User Experiences and Telemetry (primary telemetry service)
+            'dmwappushservice',                             # WAP Push Message Routing Service
+            'MapsBroker',                                   # Downloaded Maps Manager
+            'diagnosticshub.standardcollector.service',    # Microsoft Diagnostics Hub Standard Collector Service
+            'pcasvc',                                       # Program Compatibility Assistant Service
+            'PcaSvc'                                        # Program Compatibility Assistant Service (alternative name)
+        )
+        
+        # Services that may not exist in Windows 11 24H2 but should be checked
+        $conditionalServices = @(
+            'DPS',                                          # Diagnostic Policy Service (may not exist)
+            'WdiServiceHost',                               # Diagnostic Service Host (may not exist)
+            'WdiSystemHost'                                 # Diagnostic System Host (may not exist)
+        )
+        
+        $disabledCount = 0
+        $notFoundCount = 0
+        
+        # Process primary telemetry services
+        foreach ($service in $servicesToDisable) {
+            try {
+                # Check if service exists first
+                $serviceKey = "HKLM\zSYSTEM\ControlSet001\Services\$service"
+                $checkResult = & reg query "$serviceKey" 2>&1
+                
+                if ($LASTEXITCODE -eq 0) {
+                    # Service exists, disable it (set Start = 4 for disabled)
+                    $disableResult = & reg add "$serviceKey" /v Start /t REG_DWORD /d 4 /f 2>&1
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Log "Disabled service: $service" -Level Info
+                        $disabledCount++
+                    } else {
+                        Write-Log "Failed to disable service $service : $disableResult" -Level Warning
+                    }
+                } else {
+                    Write-Log "Service not found: $service (may not exist in Windows 11 24H2)" -Level Info
+                    $notFoundCount++
+                }
+            }
+            catch {
+                Write-Log "Failed to process service $service : $($_.Exception.Message)" -Level Warning
+            }
+        }
+        
+        # Process conditional services (those that may not exist in newer Windows versions)
+        foreach ($service in $conditionalServices) {
+            try {
+                $serviceKey = "HKLM\zSYSTEM\ControlSet001\Services\$service"
+                $checkResult = & reg query "$serviceKey" 2>&1
+                
+                if ($LASTEXITCODE -eq 0) {
+                    $disableResult = & reg add "$serviceKey" /v Start /t REG_DWORD /d 4 /f 2>&1
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Log "Disabled conditional service: $service" -Level Info
+                        $disabledCount++
+                    } else {
+                        Write-Log "Failed to disable conditional service $service : $disableResult" -Level Warning
+                    }
+                } else {
+                    Write-Log "Conditional service not found: $service (expected in Windows 11 24H2)" -Level Info
+                    $notFoundCount++
+                }
+            }
+            catch {
+                Write-Log "Failed to process conditional service $service : $($_.Exception.Message)" -Level Warning
+            }
+        }
+        
+        # Also disable in ControlSet002 if it exists (for completeness)
+        Write-Log "Checking ControlSet002 for additional service instances..." -Level Info
+        $controlSet002Path = "HKLM\zSYSTEM\ControlSet002"
+        $cs2CheckResult = & reg query "$controlSet002Path" 2>&1
+        
+        if ($LASTEXITCODE -eq 0) {
+            foreach ($service in $servicesToDisable) {
+                try {
+                    $serviceKey = "$controlSet002Path\Services\$service"
+                    $checkResult = & reg query "$serviceKey" 2>&1
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        & reg add "$serviceKey" /v Start /t REG_DWORD /d 4 /f 2>&1 | Out-Null
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Log "Disabled service in ControlSet002: $service" -Level Info
+                        }
+                    }
+                } catch {
+                    # Silently continue for ControlSet002 errors
+                }
+            }
+        }
+        
+        if ($disabledCount -gt 0) {
+            Write-Log "Telemetry services configuration completed - Disabled: $disabledCount, Not found: $notFoundCount" -Level Success
+        } else {
+            Write-Log "No telemetry services were disabled (all services may have been already disabled or not present)" -Level Warning
+        }
+        
         return $true
     }
     catch {
@@ -309,15 +408,39 @@ function Disable-TelemetryServices {
         return $false
     }
     finally {
-        # Unload SYSTEM hive
-        & reg unload HKLM\zSYSTEM | Out-Null
+        # Enhanced SYSTEM hive unloading
+        try {
+            Write-Log "Unloading SYSTEM hive..." -Level Info
+            
+            # Force garbage collection to release registry handles
+            [GC]::Collect()
+            [GC]::WaitForPendingFinalizers()
+            
+            Start-Sleep -Seconds 2
+            
+            $unloadResult = & reg unload HKLM\zSYSTEM 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "First SYSTEM hive unload attempt failed, retrying..." -Level Warning
+                Start-Sleep -Seconds 3
+                $unloadResult = & reg unload HKLM\zSYSTEM 2>&1
+                
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Log "Warning: Failed to cleanly unload SYSTEM hive: $unloadResult" -Level Warning
+                }
+            } else {
+                Write-Log "SYSTEM hive unloaded successfully" -Level Success
+            }
+        } catch {
+            Write-Log "Error during SYSTEM hive unload: $($_.Exception.Message)" -Level Warning
+        }
     }
 }
 
 function Remove-TelemetryScheduledTasks {
     <#
     .SYNOPSIS
-        Removes telemetry and data collection scheduled tasks
+        Removes telemetry and data collection scheduled tasks for Windows 11 24H2
+        Updated with modern task detection method based on task names rather than obsolete GUIDs
         
     .PARAMETER MountPath
         Path to the mounted Windows image
@@ -327,41 +450,173 @@ function Remove-TelemetryScheduledTasks {
         [string]$MountPath
     )
     
-    Write-Log "Removing telemetry scheduled tasks..." -Level Info
+    Write-Log "Removing telemetry scheduled tasks for Windows 11 24H2..." -Level Info
     
     try {
-        # Load SOFTWARE hive for scheduled tasks
-        & reg load HKLM\zSOFTWARE "$MountPath\Windows\System32\config\SOFTWARE" | Out-Null
+        # Improved registry hive loading with better error handling
+        $softwareHivePath = "$MountPath\Windows\System32\config\SOFTWARE"
+        if (-not (Test-Path $softwareHivePath)) {
+            Write-Log "SOFTWARE hive not found at $softwareHivePath" -Level Warning
+            return $false
+        }
+
+        # Force unload any existing hive to prevent conflicts
+        & reg unload HKLM\zSOFTWARE 2>&1 | Out-Null
+        Start-Sleep -Seconds 1
         
-        # Task GUIDs to remove
-        $tasksToRemove = @(
-            '{0600DD45-FAF2-4131-A006-0B17509B9F78}',  # Application Compatibility Appraiser
-            '{4738DE7A-BCC1-4E2D-B1B0-CADB044BFA81}',  # Customer Experience Improvement Program
-            '{6FAC31FA-4A85-4E64-BFD5-2154FF4594B3}',  # Customer Experience Improvement Program
-            '{FC931F16-B50A-472E-B061-B6F79A71EF59}',  # Customer Experience Improvement Program
-            '{0671EB05-7D95-4153-A32B-1426B9FE61DB}',  # Program Data Updater
-            '{87BF85F4-2CE1-4160-96EA-52F554AA28A2}',  # Autochk Proxy
-            '{8A9C643C-3D74-4099-B6BD-9C6D170898B1}',  # Autochk Proxy
-            '{E3176A65-4E44-4ED3-AA73-3283660ACB9C}'   # QueueReporting
-        )
-        
-        foreach ($taskId in $tasksToRemove) {
-            try {
-                & reg delete "HKLM\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks\$taskId" /f | Out-Null
-                
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Log "Removed scheduled task: $taskId" -Level Info
-                }
-                else {
-                    Write-Log "Task not found: $taskId (may not exist)" -Level Info
-                }
-            }
-            catch {
-                Write-Log "Failed to remove task $taskId`: $($_.Exception.Message)" -Level Warning
+        # Load SOFTWARE hive with enhanced permissions
+        Write-Log "Loading SOFTWARE hive for task analysis..." -Level Info
+        $loadResult = & reg load HKLM\zSOFTWARE "$softwareHivePath" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log "Failed to load SOFTWARE hive: $loadResult" -Level Warning
+            # Try alternative approach with takeown
+            & takeown /f "$softwareHivePath" /a 2>&1 | Out-Null
+            & icacls "$softwareHivePath" /grant "Administrators:(F)" 2>&1 | Out-Null
+            
+            $loadResult = & reg load HKLM\zSOFTWARE "$softwareHivePath" 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "Failed to load SOFTWARE hive after permission fix: $loadResult" -Level Error
+                return $false
             }
         }
         
-        Write-Log "Telemetry scheduled tasks removal completed" -Level Success
+        # Wait for hive to be fully loaded
+        Start-Sleep -Seconds 3
+        
+        # Modern Windows 11 24H2 telemetry tasks based on research
+        # Using task path-based detection instead of obsolete GUIDs
+        $telemetryTaskPaths = @(
+            # Application Experience tasks
+            "Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+            "Microsoft\Windows\Application Experience\ProgramDataUpdater", 
+            "Microsoft\Windows\Application Experience\StartupAppTask",
+            "Microsoft\Windows\Application Experience\AitAgent",
+            "Microsoft\Windows\Application Experience\PcaPatchDbTask",
+            
+            # Customer Experience Improvement Program tasks
+            "Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
+            "Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
+            "Microsoft\Windows\Customer Experience Improvement Program\KernelCeipTask",
+            
+            # Disk Diagnostic telemetry
+            "Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
+            
+            # Autochk SQM data collection
+            "Microsoft\Windows\Autochk\Proxy"
+        )
+
+        $removedCount = 0
+        $taskRegistryBase = "HKLM\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache"
+        
+        # First, discover actual task GUIDs by scanning the Tree structure
+        Write-Log "Discovering telemetry task GUIDs in Windows 11 24H2 image..." -Level Info
+        $discoveredTasks = @()
+        
+        foreach ($taskPath in $telemetryTaskPaths) {
+            try {
+                $treeKey = "$taskRegistryBase\Tree\$taskPath"
+                $queryResult = & reg query "$treeKey" /v "Id" 2>&1
+                
+                if ($LASTEXITCODE -eq 0) {
+                    # Extract GUID from registry output
+                    $guidMatch = [regex]::Match($queryResult, '\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}')
+                    if ($guidMatch.Success) {
+                        $taskGuid = $guidMatch.Value
+                        $discoveredTasks += @{
+                            Path = $taskPath
+                            GUID = $taskGuid
+                            TreeKey = $treeKey
+                            TaskKey = "$taskRegistryBase\Tasks\$taskGuid"
+                        }
+                        Write-Log "Discovered telemetry task: $taskPath -> $taskGuid" -Level Info
+                    }
+                } else {
+                    Write-Log "Telemetry task not found: $taskPath (may not exist in this Windows version)" -Level Info
+                }
+            }
+            catch {
+                Write-Log "Error discovering task $taskPath : $($_.Exception.Message)" -Level Warning
+            }
+        }
+        
+        # Remove discovered telemetry tasks
+        Write-Log "Removing $($discoveredTasks.Count) discovered telemetry tasks..." -Level Info
+        
+        foreach ($task in $discoveredTasks) {
+            try {
+                $taskRemoved = $false
+                
+                # Remove from Tasks key (main task definition)
+                if (Test-Path "Registry::$($task.TaskKey)") {
+                    $deleteResult = & reg delete "$($task.TaskKey)" /f 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Log "Removed task definition: $($task.Path)" -Level Success
+                        $taskRemoved = $true
+                    } else {
+                        Write-Log "Failed to remove task definition $($task.Path): $deleteResult" -Level Warning
+                    }
+                }
+                
+                # Remove from Tree key (task registration)
+                $deleteResult = & reg delete "$($task.TreeKey)" /f 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "Removed task registration: $($task.Path)" -Level Success
+                    $taskRemoved = $true
+                } else {
+                    Write-Log "Failed to remove task registration $($task.Path): $deleteResult" -Level Warning
+                }
+                
+                # Remove from trigger-specific keys if they exist
+                $triggerKeys = @(
+                    "$taskRegistryBase\Logon\$($task.GUID)",
+                    "$taskRegistryBase\Plain\$($task.GUID)", 
+                    "$taskRegistryBase\Boot\$($task.GUID)"
+                )
+                
+                foreach ($triggerKey in $triggerKeys) {
+                    $checkResult = & reg query "$triggerKey" 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        $deleteResult = & reg delete "$triggerKey" /f 2>&1
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Log "Removed trigger key for: $($task.Path)" -Level Success
+                        }
+                    }
+                }
+                
+                if ($taskRemoved) {
+                    $removedCount++
+                }
+            }
+            catch {
+                Write-Log "Failed to process task $($task.Path): $($_.Exception.Message)" -Level Warning
+            }
+        }
+        
+        # Also remove XML task files if they exist in the mounted image
+        $tasksXmlPath = "$MountPath\Windows\System32\Tasks"
+        if (Test-Path $tasksXmlPath) {
+            Write-Log "Removing telemetry task XML files..." -Level Info
+            
+            foreach ($taskPath in $telemetryTaskPaths) {
+                try {
+                    $xmlTaskPath = Join-Path $tasksXmlPath $taskPath
+                    if (Test-Path $xmlTaskPath) {
+                        Remove-Item -Path $xmlTaskPath -Force -ErrorAction SilentlyContinue
+                        Write-Log "Removed XML task file: $taskPath" -Level Success
+                    }
+                }
+                catch {
+                    Write-Log "Failed to remove XML task file $taskPath : $($_.Exception.Message)" -Level Warning
+                }
+            }
+        }
+        
+        if ($removedCount -gt 0) {
+            Write-Log "Telemetry scheduled tasks removal completed - Successfully removed: $removedCount tasks" -Level Success
+        } else {
+            Write-Log "No telemetry tasks found to remove (clean Windows 11 24H2 image or tasks already removed)" -Level Info
+        }
+        
         return $true
     }
     catch {
@@ -369,8 +624,36 @@ function Remove-TelemetryScheduledTasks {
         return $false
     }
     finally {
-        # Unload SOFTWARE hive
-        & reg unload HKLM\zSOFTWARE | Out-Null
+        # Enhanced hive unloading with multiple retry attempts
+        try {
+            Write-Log "Unloading SOFTWARE hive..." -Level Info
+            
+            # Force garbage collection to release registry handles
+            [GC]::Collect()
+            [GC]::WaitForPendingFinalizers()
+            [GC]::Collect()
+            
+            Start-Sleep -Seconds 2
+            
+            # Attempt graceful unload
+            $unloadResult = & reg unload HKLM\zSOFTWARE 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "First unload attempt failed, trying alternative method..." -Level Warning
+                
+                # Force close any remaining handles and retry
+                Start-Sleep -Seconds 3
+                $unloadResult = & reg unload HKLM\zSOFTWARE 2>&1
+                
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Log "Warning: Failed to cleanly unload SOFTWARE hive: $unloadResult" -Level Warning
+                    Write-Log "This may not affect the final image integrity" -Level Info
+                }
+            } else {
+                Write-Log "SOFTWARE hive unloaded successfully" -Level Success
+            }
+        } catch {
+            Write-Log "Error during hive unload: $($_.Exception.Message)" -Level Warning
+        }
     }
 }
 
