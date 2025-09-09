@@ -106,6 +106,9 @@ function Optimize-SystemSettings {
         # Remove OneDrive setup
         Remove-OneDrive -MountPath $MountPath
         
+        # Remove additional system files and components
+        Remove-AdditionalSystemFiles -MountPath $MountPath
+        
         # Disable telemetry services
         Disable-TelemetryServices -MountPath $MountPath
         
@@ -766,6 +769,185 @@ function Remove-OneDrive {
     }
     catch {
         Write-Log "OneDrive removal failed: $($_.Exception.Message)" -Level Error
+        return $false
+    }
+}
+
+function Remove-AdditionalSystemFiles {
+    <#
+    .SYNOPSIS
+        Removes additional system files and legacy components that packages alone might not handle
+        
+    .PARAMETER MountPath
+        Path to the mounted Windows image
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$MountPath
+    )
+    
+    Write-Log "Removing additional system files and components..." -Level Info
+    
+    try {
+        $successCount = 0
+        $failCount = 0
+        
+        # Define system files/directories to remove
+        $systemItemsToRemove = @(
+            # Internet Explorer remnants
+            @{
+                Path = "$MountPath\Program Files\Internet Explorer"
+                Description = "Internet Explorer program files"
+                Type = "Directory"
+            },
+            @{
+                Path = "$MountPath\Windows\System32\ie4uinit.exe"
+                Description = "Internet Explorer initialization"
+                Type = "File"
+            },
+            @{
+                Path = "$MountPath\Windows\System32\iedkcs32.dll"
+                Description = "Internet Explorer data binding"
+                Type = "File"
+            },
+            
+            # IExpress (legacy packaging tool)
+            @{
+                Path = "$MountPath\Windows\System32\iexpress.exe"
+                Description = "IExpress packaging tool"
+                Type = "File"
+            },
+            
+            # Math Input Panel (replaced by touch keyboard)
+            @{
+                Path = "$MountPath\Program Files\Common Files\Microsoft Shared\ink\mip.exe"
+                Description = "Math Input Panel executable"
+                Type = "File"
+            },
+            @{
+                Path = "$MountPath\Windows\System32\mip.exe"
+                Description = "Math Input Panel system executable"
+                Type = "File"
+            },
+            
+            # Steps Recorder (rarely used troubleshooting tool)
+            @{
+                Path = "$MountPath\Windows\System32\psr.exe"
+                Description = "Problem Steps Recorder"
+                Type = "File"
+            },
+            
+            # Legacy Windows Media Player files (not the store app)
+            @{
+                Path = "$MountPath\Program Files\Windows Media Player"
+                Description = "Windows Media Player (legacy)"
+                Type = "Directory"
+            },
+            @{
+                Path = "$MountPath\Windows\System32\wmplayer.exe"
+                Description = "Windows Media Player executable"
+                Type = "File"
+            },
+            
+            # XPS Viewer (legacy document viewer)
+            @{
+                Path = "$MountPath\Windows\System32\xpsrchvw.exe"
+                Description = "XPS Viewer"
+                Type = "File"
+            },
+            
+            # Legacy PowerShell ISE files (if not removed by package removal)
+            @{
+                Path = "$MountPath\Windows\System32\WindowsPowerShell\v1.0\PowerShell_ISE.exe"
+                Description = "PowerShell ISE executable"
+                Type = "File"
+            },
+            
+            # Windows Hello Face files (if not needed)
+            @{
+                Path = "$MountPath\Windows\System32\WinBioPlugIns\FaceFodUninstaller.exe"
+                Description = "Windows Hello Face uninstaller"
+                Type = "File"
+            },
+            
+            # Additional bloatware game files
+            @{
+                Path = "$MountPath\Windows\System32\Microsoft-Windows-GameExplorer"
+                Description = "Game Explorer system files"
+                Type = "Directory"
+            }
+        )
+        
+        foreach ($item in $systemItemsToRemove) {
+            try {
+                if (Test-Path $item.Path) {
+                    Write-Log "Removing $($item.Description): $($item.Path)" -Level Info
+                    
+                    # Take ownership and set permissions for system files
+                    if ($item.Type -eq "Directory") {
+                        & takeown /f $item.Path /r /d y 2>&1 | Out-Null
+                        & icacls $item.Path /grant "Administrators:(F)" /T /C 2>&1 | Out-Null
+                        Remove-Item -Path $item.Path -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                    else {
+                        & takeown /f $item.Path /d y 2>&1 | Out-Null  
+                        & icacls $item.Path /grant "Administrators:(F)" /C 2>&1 | Out-Null
+                        Remove-Item -Path $item.Path -Force -ErrorAction SilentlyContinue
+                    }
+                    
+                    # Verify removal
+                    if (-not (Test-Path $item.Path)) {
+                        Write-Log "Successfully removed: $($item.Description)" -Level Success
+                        $successCount++
+                    }
+                    else {
+                        Write-Log "Failed to remove: $($item.Description)" -Level Warning
+                        $failCount++
+                    }
+                }
+                else {
+                    Write-Log "$($item.Description) not found, skipping" -Level Info
+                }
+            }
+            catch {
+                Write-Log "Error removing $($item.Description): $($_.Exception.Message)" -Level Warning
+                $failCount++
+            }
+        }
+        
+        # Remove additional registry-based bloatware folders if they exist
+        $additionalPaths = @(
+            "$MountPath\Windows\SystemApps\Microsoft.Windows.Cortana_cw5n1h2txyewy",
+            "$MountPath\Windows\SystemApps\Microsoft.XboxGameCallableUI_cw5n1h2txyewy",
+            "$MountPath\Windows\SystemApps\Microsoft.XboxApp_48.49.31001.0_x64__8wekyb3d8bbwe"
+        )
+        
+        foreach ($path in $additionalPaths) {
+            try {
+                if (Test-Path $path) {
+                    $folderName = Split-Path $path -Leaf
+                    Write-Log "Removing SystemApp: $folderName" -Level Info
+                    & takeown /f $path /r /d y 2>&1 | Out-Null
+                    & icacls $path /grant "Administrators:(F)" /T /C 2>&1 | Out-Null
+                    Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                    
+                    if (-not (Test-Path $path)) {
+                        Write-Log "Successfully removed SystemApp: $folderName" -Level Success
+                        $successCount++
+                    }
+                }
+            }
+            catch {
+                Write-Log "Error removing SystemApp $path`: $($_.Exception.Message)" -Level Warning
+                $failCount++
+            }
+        }
+        
+        Write-Log "Additional system file removal completed - Success: $successCount, Failed: $failCount" -Level Success
+        return $true
+    }
+    catch {
+        Write-Log "Additional system file removal failed: $($_.Exception.Message)" -Level Error
         return $false
     }
 }
