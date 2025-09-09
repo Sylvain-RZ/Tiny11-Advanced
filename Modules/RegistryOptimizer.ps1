@@ -63,7 +63,7 @@ function Optimize-RegistrySettings {
 function Mount-RegistryHives {
     <#
     .SYNOPSIS
-        Mounts registry hives from the Windows image for editing
+        Mounts registry hives from the Windows image for editing with enhanced error handling
         
     .PARAMETER MountPath
         Path to the mounted Windows image
@@ -76,6 +76,11 @@ function Mount-RegistryHives {
     Write-Log "Mounting registry hives..." -Level Info
     
     try {
+        # Verify that we have necessary permissions
+        if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Write-Log "Administrator privileges required for registry hive operations" -Level Warning
+        }
+        
         $hives = @{
             'HKLM\zCOMPONENTS' = "$MountPath\Windows\System32\config\COMPONENTS"
             'HKLM\zDEFAULT' = "$MountPath\Windows\System32\config\default" 
@@ -84,19 +89,53 @@ function Mount-RegistryHives {
             'HKLM\zSYSTEM' = "$MountPath\Windows\System32\config\SYSTEM"
         }
         
+        $mountedHives = @()
+        $allSuccessful = $true
+        
         foreach ($hive in $hives.GetEnumerator()) {
             if (Test-Path $hive.Value) {
-                & reg load $hive.Key $hive.Value | Out-Null
+                # Verify file is not in use
+                try {
+                    $fileStream = [System.IO.File]::Open($hive.Value, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+                    $fileStream.Close()
+                }
+                catch {
+                    Write-Log "Hive file may be in use: $($hive.Value)" -Level Warning
+                }
+                
+                # Attempt to load the hive
+                $output = & reg load $hive.Key $hive.Value 2>&1
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Log "Loaded hive: $($hive.Key)" -Level Info
+                    Write-Log "Successfully loaded hive: $($hive.Key)" -Level Info
+                    $mountedHives += $hive.Key
                 }
                 else {
-                    Write-Log "Failed to load hive: $($hive.Key)" -Level Warning
+                    Write-Log "Failed to load hive: $($hive.Key) - Error: $output" -Level Warning
+                    $allSuccessful = $false
                 }
+            }
+            else {
+                Write-Log "Hive file not found: $($hive.Value)" -Level Warning
+                $allSuccessful = $false
             }
         }
         
-        return $true
+        # Verify mounted hives are accessible
+        Start-Sleep -Milliseconds 1000  # Allow time for hives to be fully mounted
+        
+        foreach ($hiveName in $mountedHives) {
+            try {
+                $testResult = & reg query $hiveName 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Log "Mounted hive not accessible: $hiveName" -Level Warning
+                }
+            }
+            catch {
+                Write-Log "Error testing hive accessibility: $hiveName" -Level Warning
+            }
+        }
+        
+        return $allSuccessful
     }
     catch {
         Write-Log "Failed to mount registry hives: $($_.Exception.Message)" -Level Error
@@ -107,7 +146,7 @@ function Mount-RegistryHives {
 function Dismount-RegistryHives {
     <#
     .SYNOPSIS
-        Dismounts all mounted registry hives
+        Dismounts all mounted registry hives with enhanced error handling and cleanup
     #>
     
     Write-Log "Dismounting registry hives..." -Level Info
@@ -115,13 +154,54 @@ function Dismount-RegistryHives {
     $hives = @('HKLM\zCOMPONENTS', 'HKLM\zDEFAULT', 'HKLM\zNTUSER', 'HKLM\zSOFTWARE', 'HKLM\zSYSTEM')
     
     foreach ($hive in $hives) {
-        try {
-            & reg unload $hive | Out-Null
-            Write-Log "Unloaded hive: $hive" -Level Info
+        $maxRetries = 5
+        $retryCount = 0
+        $unloaded = $false
+        
+        while ($retryCount -lt $maxRetries -and -not $unloaded) {
+            try {
+                # Force garbage collection before attempting to unload
+                [System.GC]::Collect()
+                [System.GC]::WaitForPendingFinalizers()
+                
+                # Attempt to unload the hive
+                $output = & reg unload $hive 2>&1
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "Successfully unloaded hive: $hive" -Level Info
+                    $unloaded = $true
+                }
+                else {
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-Log "Retrying to unload hive: $hive (attempt $($retryCount + 1)) - Error: $output" -Level Warning
+                        Start-Sleep -Seconds 2
+                    }
+                    else {
+                        Write-Log "Failed to unload hive after $maxRetries attempts: $hive - Error: $output" -Level Warning
+                    }
+                }
+            }
+            catch {
+                $retryCount++
+                if ($retryCount -lt $maxRetries) {
+                    Write-Log "Exception unloading hive, retrying: $hive - $($_.Exception.Message)" -Level Warning
+                    Start-Sleep -Seconds 2
+                }
+                else {
+                    Write-Log "Failed to unload hive after $maxRetries attempts: $hive - $($_.Exception.Message)" -Level Warning
+                }
+            }
         }
-        catch {
-            Write-Log "Failed to unload hive: $hive" -Level Warning
-        }
+    }
+    
+    # Final cleanup - attempt to close any remaining handles
+    try {
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+    }
+    catch {
+        # Ignore cleanup errors
     }
 }
 
@@ -640,7 +720,7 @@ function Bypass-SystemRequirements {
 function Apply-RegistrySettings {
     <#
     .SYNOPSIS
-        Applies an array of registry settings
+        Applies an array of registry settings with enhanced error handling
         
     .PARAMETER Settings
         Array of registry settings to apply
@@ -651,18 +731,49 @@ function Apply-RegistrySettings {
     )
     
     foreach ($setting in $Settings) {
-        try {
-            & reg add $setting.Path /v $setting.Name /t $setting.Type /d $setting.Data /f | Out-Null
-            
-            if ($LASTEXITCODE -eq 0) {
-                Write-Log "Applied registry setting: $($setting.Path)\$($setting.Name)" -Level Info
+        $maxRetries = 3
+        $retryCount = 0
+        $success = $false
+        
+        while ($retryCount -lt $maxRetries -and -not $success) {
+            try {
+                # Check if the hive path exists before attempting to modify
+                $hivePath = $setting.Path -replace '^HKLM\\z', 'HKLM\z'
+                
+                # Create the parent key if it doesn't exist
+                $parentPath = Split-Path $hivePath -Parent
+                if ($parentPath -and $parentPath -ne $hivePath) {
+                    & reg add $parentPath /f | Out-Null
+                }
+                
+                # Apply the registry setting
+                & reg add $setting.Path /v $setting.Name /t $setting.Type /d $setting.Data /f | Out-Null
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "Applied registry setting: $($setting.Path)\$($setting.Name)" -Level Info
+                    $success = $true
+                }
+                else {
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-Log "Retrying registry setting: $($setting.Path)\$($setting.Name) (attempt $($retryCount + 1))" -Level Warning
+                        Start-Sleep -Milliseconds 500
+                    }
+                    else {
+                        Write-Log "Failed to apply registry setting after $maxRetries attempts: $($setting.Path)\$($setting.Name) (Error code: $LASTEXITCODE)" -Level Warning
+                    }
+                }
             }
-            else {
-                Write-Log "Failed to apply registry setting: $($setting.Path)\$($setting.Name)" -Level Warning
+            catch {
+                $retryCount++
+                if ($retryCount -lt $maxRetries) {
+                    Write-Log "Exception occurred, retrying: $($setting.Path)\$($setting.Name) - $($_.Exception.Message)" -Level Warning
+                    Start-Sleep -Milliseconds 500
+                }
+                else {
+                    Write-Log "Error applying registry setting after $maxRetries attempts: $($setting.Path)\$($setting.Name) - $($_.Exception.Message)" -Level Error
+                }
             }
-        }
-        catch {
-            Write-Log "Error applying registry setting $($setting.Path)\$($setting.Name): $($_.Exception.Message)" -Level Error
         }
     }
 }
