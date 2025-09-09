@@ -19,12 +19,17 @@ function Optimize-SystemSettings {
         
     .PARAMETER EnableDotNet35
         Whether to enable .NET Framework 3.5
+        
+    .PARAMETER SkipWinSxS
+        Skip WinSxS optimization for faster processing
     #>
     param(
         [Parameter(Mandatory)]
         [string]$MountPath,
         
-        [switch]$EnableDotNet35
+        [switch]$EnableDotNet35,
+        
+        [switch]$SkipWinSxS
     )
     
     Write-Log "Starting system optimization process..." -Level Info
@@ -49,7 +54,7 @@ function Optimize-SystemSettings {
         }
         
         # Optimize WinSxS (advanced cleanup)
-        Optimize-WinSxSStore -MountPath $MountPath
+        Optimize-WinSxSStore -MountPath $MountPath -SkipWinSxS:$SkipWinSxS
         
         Write-Log "System optimization completed successfully" -Level Success
         return $true
@@ -300,30 +305,58 @@ function Optimize-WinSxSStore {
         
     .PARAMETER MountPath
         Path to the mounted Windows image
+        
+    .PARAMETER SkipWinSxS
+        Skip WinSxS optimization entirely (for faster processing)
     #>
     param(
         [Parameter(Mandatory)]
-        [string]$MountPath
+        [string]$MountPath,
+        
+        [switch]$SkipWinSxS
     )
+    
+    if ($SkipWinSxS) {
+        Write-Log "Skipping WinSxS optimization as requested" -Level Info
+        return $true
+    }
     
     Write-Log "Starting WinSxS optimization..." -Level Info
     
     try {
         # First, analyze current WinSxS size
         Write-Log "Analyzing WinSxS component store..." -Level Info
-        & dism /Image:$MountPath /Cleanup-Image /AnalyzeComponentStore | Out-Null
         
-        if ($LASTEXITCODE -ne 0) {
-            Write-Log "WinSxS analysis failed, skipping optimization" -Level Warning
+        # Run DISM with timeout and proper output handling
+        $dismProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/AnalyzeComponentStore" -PassThru -WindowStyle Hidden
+        
+        # Wait for process completion with timeout (5 minutes)
+        $timeoutSeconds = 300
+        if (-not $dismProcess.WaitForExit($timeoutSeconds * 1000)) {
+            Write-Log "WinSxS analysis timed out after $timeoutSeconds seconds, killing process..." -Level Warning
+            $dismProcess.Kill()
+            Write-Log "Skipping WinSxS optimization due to timeout" -Level Warning
+            return $false
+        }
+        
+        if ($dismProcess.ExitCode -ne 0) {
+            Write-Log "WinSxS analysis failed (Exit code: $($dismProcess.ExitCode)), skipping optimization" -Level Warning
             return $false
         }
         
         # Perform standard component cleanup
         Write-Log "Performing standard component cleanup..." -Level Info
-        & dism /Image:$MountPath /Cleanup-Image /StartComponentCleanup | Out-Null
+        $cleanupProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/StartComponentCleanup" -PassThru -WindowStyle Hidden
         
-        if ($LASTEXITCODE -ne 0) {
-            Write-Log "Standard component cleanup failed" -Level Warning
+        # Wait for cleanup completion with timeout (10 minutes)
+        $cleanupTimeoutSeconds = 600
+        if (-not $cleanupProcess.WaitForExit($cleanupTimeoutSeconds * 1000)) {
+            Write-Log "Component cleanup timed out after $cleanupTimeoutSeconds seconds, killing process..." -Level Warning
+            $cleanupProcess.Kill()
+            Write-Log "Standard component cleanup was killed due to timeout" -Level Warning
+        }
+        elseif ($cleanupProcess.ExitCode -ne 0) {
+            Write-Log "Standard component cleanup failed (Exit code: $($cleanupProcess.ExitCode))" -Level Warning
         }
         else {
             Write-Log "Standard component cleanup completed" -Level Success
@@ -353,7 +386,13 @@ function Optimize-WinSxSStore {
         
         # Final analysis to show space savings
         Write-Log "Performing final WinSxS analysis..." -Level Info
-        & dism /Image:$MountPath /Cleanup-Image /AnalyzeComponentStore | Out-Null
+        $finalAnalysisProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/AnalyzeComponentStore" -PassThru -WindowStyle Hidden
+        
+        # Wait for final analysis with timeout (5 minutes)
+        if (-not $finalAnalysisProcess.WaitForExit($timeoutSeconds * 1000)) {
+            Write-Log "Final WinSxS analysis timed out after $timeoutSeconds seconds, killing process..." -Level Warning
+            $finalAnalysisProcess.Kill()
+        }
         
         return $true
     }
