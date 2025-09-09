@@ -81,7 +81,7 @@ Cette commande autorise l'exécution de scripts PowerShell locaux et distants si
 .\Tiny11Advanced.ps1
 
 # Utilisation avec paramètres
-.\Tiny11Advanced.ps1 -SourcePath "D:" -EnableDotNet35 -DisableDefender
+.\Tiny11Advanced.ps1 -SourcePath "D:" -EnableDotNet35 -DisableDefender -SkipWinSxS
 ```
 
 ### Paramètres disponibles
@@ -94,13 +94,17 @@ Cette commande autorise l'exécution de scripts PowerShell locaux et distants si
 | `-EnableDotNet35` | Active .NET Framework 3.5 | `-EnableDotNet35` |
 | `-DisableDefender` | Désactive Windows Defender | `-DisableDefender` |
 | `-SkipSystemPackages` | Ignore les packages système | `-SkipSystemPackages` |
+| `-SkipWinSxS` | Ignore l'optimisation WinSxS (évite les blocages) | `-SkipWinSxS` |
 | `-RemoveAdditionalLanguages` | Supprime les packs de langues additionnels | `-RemoveAdditionalLanguages` |
 
 ### Exemples d'utilisation
 
 ```powershell
 # Configuration complète avec toutes les optimisations
-.\Tiny11Advanced.ps1 -SourcePath "D:" -OutputPath "C:\Output" -EnableDotNet35 -DisableDefender -RemoveAdditionalLanguages
+.\Tiny11Advanced.ps1 -SourcePath "D:" -OutputPath "C:\Output" -EnableDotNet35 -DisableDefender -SkipWinSxS -RemoveAdditionalLanguages
+
+# Pour éviter les blocages WinSxS (traitement rapide)
+.\Tiny11Advanced.ps1 -SourcePath "D:" -SkipWinSxS
 
 # Traitement rapide en conservant les packages système
 .\Tiny11Advanced.ps1 -SourcePath "E:" -SkipSystemPackages

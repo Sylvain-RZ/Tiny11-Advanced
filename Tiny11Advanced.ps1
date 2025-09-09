@@ -28,11 +28,14 @@
 .PARAMETER SkipSystemPackages
     Skip removal of system packages for faster processing
 
+.PARAMETER SkipWinSxS
+    Skip WinSxS optimization for faster processing (avoids potential hanging)
+
 .PARAMETER RemoveAdditionalLanguages
     Remove additional language packs while preserving primary language
     
 .EXAMPLE
-    .\Tiny11Advanced.ps1 -SourcePath "D:" -EnableDotNet35 -DisableDefender -RemoveAdditionalLanguages
+    .\Tiny11Advanced.ps1 -SourcePath "D:" -EnableDotNet35 -DisableDefender -SkipWinSxS -RemoveAdditionalLanguages
     
 .NOTES
     Version: 1.0
@@ -74,6 +77,9 @@ param(
     
     [Parameter(Mandatory = $false)]
     [switch]$SkipSystemPackages,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$SkipWinSxS,
     
     [Parameter(Mandatory = $false)]
     [switch]$RemoveAdditionalLanguages
@@ -281,7 +287,7 @@ function Start-ProcessingWorkflow {
         
         # Step 6: System optimizations
         Write-Log "Step 6/8: Applying system optimizations..." -Level Info
-        Optimize-SystemSettings -MountPath $Global:ScratchDirectory -EnableDotNet35:$EnableDotNet35
+        Optimize-SystemSettings -MountPath $Global:ScratchDirectory -EnableDotNet35:$EnableDotNet35 -SkipWinSxS:$SkipWinSxS
         
         # Step 7: Security optimizations
         Write-Log "Step 7/8: Configuring security settings..." -Level Info
