@@ -56,7 +56,12 @@ param(
     [string]$SourcePath,
     
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath = $PSScriptRoot,
+    [ValidateScript({
+        if ([string]::IsNullOrEmpty($_)) { $true }  # Allow empty, will be set later
+        elseif (Test-Path $_ -PathType Container) { $true }
+        else { throw "Output path must be a valid directory: $_" }
+    })]
+    [string]$OutputPath,
     
     [Parameter(Mandatory = $false)]
     [int]$ImageIndex,
@@ -96,11 +101,7 @@ catch {
     exit 1
 }
 
-# Global variables
-$Global:WorkingDirectory = $OutputPath
-$Global:ScratchDirectory = Join-Path $OutputPath "ScratchDir"
-$Global:ImageDirectory = Join-Path $OutputPath "Tiny11Advanced"
-$Global:LogFile = Join-Path $OutputPath "Tiny11Advanced_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+# Global variables - will be initialized after parameter validation
 
 #region Helper Functions
 
@@ -332,6 +333,17 @@ function Invoke-Cleanup {
 
 function Main {
     try {
+        # Initialize OutputPath if not provided
+        if ([string]::IsNullOrEmpty($OutputPath)) {
+            $OutputPath = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location -PSProvider FileSystem | Select-Object -ExpandProperty Path }
+        }
+        
+        # Initialize global variables
+        $Global:WorkingDirectory = $OutputPath
+        $Global:ScratchDirectory = Join-Path $OutputPath "ScratchDir"
+        $Global:ImageDirectory = Join-Path $OutputPath "Tiny11Advanced"
+        $Global:LogFile = Join-Path $OutputPath "Tiny11Advanced_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+        
         # Initialize logging
         Start-Transcript -Path $Global:LogFile -ErrorAction SilentlyContinue
         
@@ -359,9 +371,15 @@ function Main {
         
         # Get image index if not specified
         if (-not $ImageIndex) {
-            $ImageIndex = Get-WindowsImageIndex -ImagePath (Join-Path $SourcePath "sources\install.wim")
-            if (-not $ImageIndex) {
+            $result = Get-WindowsImageIndex -ImagePath (Join-Path $SourcePath "sources\install.wim")
+            if (-not $result) {
                 throw "Failed to get image index"
+            }
+            # Ensure we get only the integer value, not an array
+            if ($result -is [array]) {
+                $ImageIndex = [int]$result[-1]  # Take the last element if it's an array
+            } else {
+                $ImageIndex = [int]$result
             }
         }
         

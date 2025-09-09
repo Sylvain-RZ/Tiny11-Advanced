@@ -43,7 +43,7 @@ function Copy-WindowsInstallationFiles {
             # Show available images in ESD
             $imageInfo = Get-WindowsImage -ImagePath $installEsd
             Write-Host "`nAvailable Windows images:" -ForegroundColor Yellow
-            $imageInfo | Format-Table ImageIndex, ImageName, Architecture, ImageSize -AutoSize
+            $imageInfo | Format-Table ImageIndex, ImageName, Architecture, ImageSize -AutoSize | Out-Host
             
             do {
                 $index = Read-Host "Please enter the image index to convert"
@@ -141,7 +141,7 @@ function Mount-WindowsImageAdvanced {
         if (-not $Index) {
             $imageInfo = Get-WindowsImage -ImagePath $ImagePath
             Write-Host "`nAvailable Windows images:" -ForegroundColor Yellow
-            $imageInfo | Format-Table ImageIndex, ImageName, Architecture, Version, ImageSize -AutoSize
+            $imageInfo | Format-Table ImageIndex, ImageName, Architecture, Version, ImageSize -AutoSize | Out-Host
             
             do {
                 $Index = Read-Host "Please enter the image index to process"
@@ -597,30 +597,32 @@ function Get-WindowsImageIndex {
         
         $imageInfo = Get-WindowsImage -ImagePath $ImagePath
         
-        Write-Host "`n" + "="*80 -ForegroundColor Cyan
-        Write-Host "Available Windows Images" -ForegroundColor Cyan
-        Write-Host "="*80 -ForegroundColor Cyan
+        Write-Host "`n" + "="*80 -ForegroundColor Cyan | Out-Null
+        Write-Host "Available Windows Images" -ForegroundColor Cyan | Out-Null
+        Write-Host "="*80 -ForegroundColor Cyan | Out-Null
         
-        $imageInfo | Format-Table @(
+        $null = $imageInfo | Format-Table @(
             @{Label="Index"; Expression={$_.ImageIndex}; Width=5},
             @{Label="Name"; Expression={$_.ImageName}; Width=35},
             @{Label="Architecture"; Expression={$_.Architecture}; Width=12},
             @{Label="Version"; Expression={$_.Version}; Width=15},
             @{Label="Size (GB)"; Expression={[math]::Round($_.ImageSize/1GB, 2)}; Width=10}
-        ) -AutoSize
+        ) -AutoSize | Out-Host
         
         do {
             $index = Read-Host "Please enter the image index to process"
             $selectedImage = $imageInfo | Where-Object { $_.ImageIndex -eq $index }
             
             if (-not $selectedImage) {
-                Write-Host "Invalid index '$index'. Please choose from the available indexes." -ForegroundColor Red
+                Write-Host "Invalid index '$index'. Please choose from the available indexes." -ForegroundColor Red | Out-Null
             }
             else {
-                Write-Host "Selected: $($selectedImage.ImageName)" -ForegroundColor Green
+                Write-Host "Selected: $($selectedImage.ImageName)" -ForegroundColor Green | Out-Null
                 $confirm = Read-Host "Is this correct? (y/n)"
                 if ($confirm -eq 'y' -or $confirm -eq 'Y') {
-                    return [int]$index
+                    # Ensure we return only an integer, not an array
+                    $result = [int]$index
+                    return $result
                 }
                 else {
                     $selectedImage = $null
