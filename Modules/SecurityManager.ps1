@@ -452,18 +452,18 @@ function Show-DefenderBanner {
     
     if ($Mode -eq ''Enable'') {
         Write-Host @"
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                       Windows Defender Re-enablement                        ║
-║                              Version 2.0                                    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  Restores Windows Defender functionality after Tiny11 Advanced processing  ║
-║                                                                              ║
-║  This script will:                                                          ║
-║  • Re-enable Windows Defender services                                      ║
-║  • Remove disable policies                                                  ║
-║  • Restore Windows Security UI                                              ║
-║  • Configure real-time protection                                           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
++==============================================================================+
+|                       Windows Defender Re-enablement                        |
+|                              Version 2.0                                    |
++==============================================================================+
+|  Restores Windows Defender functionality after Tiny11 Advanced processing  |
+|                                                                              |
+|  This script will:                                                          |
+|  • Re-enable Windows Defender services                                      |
+|  • Remove disable policies                                                  |
+|  • Restore Windows Security UI                                              |
+|  • Configure real-time protection                                           |
++==============================================================================+
 
 "@ -ForegroundColor Green
         
@@ -471,18 +471,18 @@ function Show-DefenderBanner {
     }
     else {
         Write-Host @"
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        Windows Defender Disablement                        ║
-║                              Version 2.0                                    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  Disables Windows Defender while preserving files for future re-enablement ║
-║                                                                              ║
-║  This script will:                                                          ║
-║  • Disable Windows Defender services                                        ║
-║  • Apply disable policies                                                   ║
-║  • Hide Windows Security UI                                                 ║
-║  • Preserve all files for future restoration                                ║
-╚══════════════════════════════════════════════════════════════════════════════╝
++==============================================================================+
+|                        Windows Defender Disablement                        |
+|                              Version 2.0                                    |
++==============================================================================+
+|  Disables Windows Defender while preserving files for future re-enablement |
+|                                                                              |
+|  This script will:                                                          |
+|  • Disable Windows Defender services                                        |
+|  • Apply disable policies                                                   |
+|  • Hide Windows Security UI                                                 |
+|  • Preserve all files for future restoration                                |
++==============================================================================+
 
 "@ -ForegroundColor Red
         

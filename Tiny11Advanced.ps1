@@ -138,16 +138,16 @@ function Write-Log {
 function Show-Banner {
     Clear-Host
     Write-Host @"
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        Tiny11 Advanced Image Creator                         ║
-║                              Version 1.0                                    ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  Creates optimized Windows 11 images with advanced debloating features      ║
-║  • Removes bloatware and telemetry                                          ║
-║  • Preserves Windows Update & Store                                         ║
-║  • Advanced anti-reinstallation methods                                     ║
-║  • Professional code architecture                                           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
++==============================================================================+
+|                        Tiny11 Advanced Image Creator                         |
+|                              Version 1.0                                     |
++==============================================================================+
+|  Creates optimized Windows 11 images with advanced debloating features       |
+|  • Removes bloatware and telemetry                                           |
+|  • Preserves Windows Update & Store                                          |
+|  • Advanced anti-reinstallation methods                                      |
+|  • Professional code architecture                                            |
++==============================================================================+
 
 "@ -ForegroundColor Cyan
 }
