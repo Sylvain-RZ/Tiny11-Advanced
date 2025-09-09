@@ -74,19 +74,44 @@ function Get-SystemArchitecture {
     )
     
     try {
-        $imageInfo = & dism /English /Get-WimInfo /wimFile:"$MountPath\..\sources\install.wim" /index:1
-        $lines = $imageInfo -split '\r?\n'
+        # Try multiple possible locations for the install image
+        $possiblePaths = @(
+            "$MountPath\..\sources\install.wim",
+            "$MountPath\..\sources\install.esd",
+            "$MountPath\..\..\sources\install.wim",
+            "$MountPath\..\..\sources\install.esd"
+        )
         
-        foreach ($line in $lines) {
-            if ($line -like '*Architecture : *') {
-                $architecture = $line -replace 'Architecture : ', ''
-                # Convert x64 to amd64 for consistency
-                if ($architecture -eq 'x64') {
-                    $architecture = 'amd64'
+        foreach ($imagePath in $possiblePaths) {
+            if (Test-Path $imagePath) {
+                Write-Log "Found image at: $imagePath" -Level Info
+                $imageInfo = & dism /English /Get-WimInfo /wimFile:"$imagePath" /index:1
+                $lines = $imageInfo -split '\r?\n'
+                
+                foreach ($line in $lines) {
+                    if ($line -like '*Architecture : *') {
+                        $architecture = $line -replace 'Architecture : ', ''
+                        # Convert x64 to amd64 for consistency
+                        if ($architecture -eq 'x64') {
+                            $architecture = 'amd64'
+                        }
+                        Write-Log "Detected architecture: $architecture" -Level Info
+                        return $architecture
+                    }
                 }
-                Write-Log "Detected architecture: $architecture" -Level Info
-                return $architecture
+                break
             }
+        }
+        
+        # Fallback: Use host system architecture
+        $hostArch = $env:PROCESSOR_ARCHITECTURE
+        if ($hostArch -eq 'AMD64') {
+            Write-Log "Using host system architecture: amd64" -Level Info
+            return 'amd64'
+        }
+        elseif ($hostArch -eq 'ARM64') {
+            Write-Log "Using host system architecture: arm64" -Level Info
+            return 'arm64'
         }
         
         Write-Log "Architecture not found, defaulting to amd64" -Level Warning
@@ -94,6 +119,14 @@ function Get-SystemArchitecture {
     }
     catch {
         Write-Log "Failed to get architecture: $($_.Exception.Message)" -Level Error
+        # Final fallback: Use host system architecture
+        $hostArch = $env:PROCESSOR_ARCHITECTURE
+        if ($hostArch -eq 'AMD64') {
+            return 'amd64'
+        }
+        elseif ($hostArch -eq 'ARM64') {
+            return 'arm64'
+        }
         return 'amd64'
     }
 }
