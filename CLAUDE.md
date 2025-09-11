@@ -356,3 +356,20 @@ Modular PowerShell 5.1+ system for creating optimized Windows 11 images. Removes
 - Multimedia Class Scheduler service optimization
 
 **Total New Optimizations Added:** 100+ registry tweaks, 60+ FOD capabilities, 25+ language optimizations, 15+ hidden service disables
+
+## Critical Fix (2025-09-11) - Protected Diagnostic Services
+**Issue:** DPS, WdiServiceHost, and WdiSystemHost services failed to be disabled due to Windows protection mechanisms, causing excessive retry attempts and warning messages.
+
+**Solution Implemented (RegistryOptimizer.ps1):**
+- Added detection for protected diagnostic services that cannot be modified
+- Reduced retry attempts from 5 to 2 for protected services to minimize delays
+- Implemented graceful handling with informative messages instead of error warnings
+- Services that cannot be disabled will remain active but user is properly informed
+
+**Technical Details:**
+- `Apply-RegistrySettings()` function enhanced with `$protectedServices` array detection
+- Pattern matching: `\\Services\\(DPS|WdiServiceHost|WdiSystemHost)$`
+- Changed log level from Warning to Info for protected service access failures
+- Message: "Protected diagnostic service [ServiceName] cannot be modified due to Windows protection. This service will remain active."
+
+**Impact:** Eliminates excessive warning messages during telemetry removal while maintaining system stability.
