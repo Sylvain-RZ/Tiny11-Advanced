@@ -168,6 +168,9 @@ function Optimize-SystemSettings {
         # Remove Features on Demand (optional Windows capabilities)
         Remove-FeaturesOnDemand -MountPath $MountPath
         
+        # Optimize language packs and cleanup (2024-2025)
+        Optimize-LanguagePackSettings -MountPath $MountPath
+        
         # Disable telemetry services
         Disable-TelemetryServices -MountPath $MountPath
         
@@ -746,6 +749,23 @@ function Optimize-WinSxSStore {
     Write-Log "Press 'S' at any time to SKIP WinSxS optimization and continue with the build process" -Level Info
     
     try {
+        # Advanced NTFS cleanup (2024-2025 enhancement)
+        Write-Log "Performing advanced NTFS journal cleanup..." -Level Info
+        try {
+            # Get the drive where the mount path is located
+            $mountDrive = [System.IO.Path]::GetPathRoot($MountPath)
+            if (-not [string]::IsNullOrEmpty($mountDrive)) {
+                # Clean NTFS journal for better DISM performance
+                Write-Log "Cleaning NTFS journal for drive $mountDrive..." -Level Info
+                & fsutil resource setautoreset true $mountDrive 2>&1 | Out-Null
+                & fsutil usn deletejournal /d /n $mountDrive 2>&1 | Out-Null
+                Write-Log "NTFS journal cleanup completed" -Level Success
+            }
+        }
+        catch {
+            Write-Log "NTFS journal cleanup failed (non-critical): $($_.Exception.Message)" -Level Warning
+        }
+        
         # First, analyze current WinSxS size
         Write-Log "Analyzing WinSxS component store..." -Level Info
         Write-Log "This may take several minutes. Press 'S' to skip if it takes too long." -Level Info
@@ -1139,34 +1159,123 @@ function Remove-FeaturesOnDemand {
     Write-Log "Starting Features on Demand removal..." -Level Info
     
     try {
-        # List of Features on Demand that are commonly unused and safe to remove
+        # Enhanced Features on Demand removal list for 2024-2025 (Windows 11 24H2/25H2)
         $fodToRemove = @(
-            'App.StepsRecorder~~~~0.0.1.0',          # Steps Recorder
+            # Legacy applications (removed in 24H2)
+            'App.StepsRecorder~~~~0.0.1.0',          # Steps Recorder (removed in 24H2)
             'App.Support.QuickAssist~~~~0.0.1.0',    # Quick Assist
             'Browser.InternetExplorer~~~~0.0.11.0',  # Internet Explorer mode
+            'Microsoft.Windows.WordPad~~~~0.0.1.0',  # WordPad (removed in 24H2)
+            'Microsoft.Windows.PowerShell.ISE~~~~0.0.1.0',  # PowerShell ISE
+            
+            # Windows Hello and biometric features
             'Hello.Face.17658~~~~0.0.1.0',           # Windows Hello Face
+            'Hello.Face.Migration.17658~~~~0.0.1.0', # Windows Hello Face Migration
+            'Hello.Face.18967~~~~0.0.1.0',          # Windows Hello Face (alternative version)
+            
+            # Language and input features
             'Language.Handwriting~~~en-US~0.0.1.0',  # Handwriting recognition
             'Language.OCR~~~en-US~0.0.1.0',          # Optical character recognition
             'Language.Speech~~~en-US~0.0.1.0',       # Speech recognition
             'Language.TextToSpeech~~~en-US~0.0.1.0', # Text-to-speech
+            'Language.Basic~~~ar-SA~0.0.1.0',        # Arabic language basics
+            'Language.Basic~~~bg-BG~0.0.1.0',        # Bulgarian language basics
+            'Language.Basic~~~cs-CZ~0.0.1.0',        # Czech language basics
+            'Language.Basic~~~da-DK~0.0.1.0',        # Danish language basics
+            'Language.Basic~~~de-DE~0.0.1.0',        # German language basics
+            'Language.Basic~~~el-GR~0.0.1.0',        # Greek language basics
+            'Language.Basic~~~es-ES~0.0.1.0',        # Spanish language basics
+            'Language.Basic~~~et-EE~0.0.1.0',        # Estonian language basics
+            'Language.Basic~~~fi-FI~0.0.1.0',        # Finnish language basics
+            'Language.Basic~~~fr-FR~0.0.1.0',        # French language basics
+            'Language.Basic~~~he-IL~0.0.1.0',        # Hebrew language basics
+            'Language.Basic~~~hr-HR~0.0.1.0',        # Croatian language basics
+            'Language.Basic~~~hu-HU~0.0.1.0',        # Hungarian language basics
+            'Language.Basic~~~it-IT~0.0.1.0',        # Italian language basics
+            'Language.Basic~~~ja-JP~0.0.1.0',        # Japanese language basics
+            'Language.Basic~~~ko-KR~0.0.1.0',        # Korean language basics
+            'Language.Basic~~~lt-LT~0.0.1.0',        # Lithuanian language basics
+            'Language.Basic~~~lv-LV~0.0.1.0',        # Latvian language basics
+            'Language.Basic~~~nb-NO~0.0.1.0',        # Norwegian language basics
+            'Language.Basic~~~nl-NL~0.0.1.0',        # Dutch language basics
+            'Language.Basic~~~pl-PL~0.0.1.0',        # Polish language basics
+            'Language.Basic~~~pt-BR~0.0.1.0',        # Portuguese (Brazil) language basics
+            'Language.Basic~~~pt-PT~0.0.1.0',        # Portuguese (Portugal) language basics
+            'Language.Basic~~~ro-RO~0.0.1.0',        # Romanian language basics
+            'Language.Basic~~~ru-RU~0.0.1.0',        # Russian language basics
+            'Language.Basic~~~sk-SK~0.0.1.0',        # Slovak language basics
+            'Language.Basic~~~sl-SI~0.0.1.0',        # Slovenian language basics
+            'Language.Basic~~~sr-Latn-RS~0.0.1.0',   # Serbian (Latin) language basics
+            'Language.Basic~~~sv-SE~0.0.1.0',        # Swedish language basics
+            'Language.Basic~~~th-TH~0.0.1.0',        # Thai language basics
+            'Language.Basic~~~tr-TR~0.0.1.0',        # Turkish language basics
+            'Language.Basic~~~uk-UA~0.0.1.0',        # Ukrainian language basics
+            'Language.Basic~~~zh-CN~0.0.1.0',        # Chinese (Simplified) language basics
+            'Language.Basic~~~zh-TW~0.0.1.0',        # Chinese (Traditional) language basics
+            
+            # Math and productivity tools
             'MathRecognizer~~~~0.0.1.0',             # Math Recognizer
+            
+            # Media applications
             'Media.WindowsMediaPlayer~~~~0.0.12.0',  # Windows Media Player Legacy
-            'Microsoft.Windows.MSPaint~~~~0.0.1.0',  # Paint
-            'Microsoft.Windows.Notepad~~~~0.0.1.0',  # Notepad
-            'Microsoft.Windows.PowerShell.ISE~~~~0.0.1.0',  # PowerShell ISE
-            'Microsoft.Windows.WordPad~~~~0.0.1.0',  # WordPad
+            'Microsoft.Windows.MSPaint~~~~0.0.1.0',  # Paint (if not needed)
+            'Microsoft.Windows.Notepad~~~~0.0.1.0',  # Notepad (if not needed)
+            
+            # Network and connectivity
             'OpenSSH.Client~~~~0.0.1.0',             # OpenSSH Client
+            'WMI-SNMP-Provider.Client~~~~0.0.1.0',   # SNMP WMI Provider
+            
+            # Printing and document features
             'Print.Fax.Scan~~~~0.0.1.0',             # Windows Fax and Scan
             'Print.Management.Console~~~~0.0.1.0',   # Print Management Console
-            'Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0',  # RSAT tools
+            'XPS.Viewer~~~~0.0.1.0',                 # XPS Viewer
+            
+            # RSAT (Remote Server Administration Tools)
+            'Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0',
+            'Rsat.BitLocker.Recovery.Tools~~~~0.0.1.0',
             'Rsat.CertificateServices.Tools~~~~0.0.1.0',
             'Rsat.DHCP.Tools~~~~0.0.1.0',
             'Rsat.Dns.Tools~~~~0.0.1.0',
+            'Rsat.FailoverCluster.Management.Tools~~~~0.0.1.0',
             'Rsat.FileServices.Tools~~~~0.0.1.0',
             'Rsat.GroupPolicy.Management.Tools~~~~0.0.1.0',
+            'Rsat.IPAM.Client.Tools~~~~0.0.1.0',
+            'Rsat.LLDP.Tools~~~~0.0.1.0',
+            'Rsat.NetworkController.Tools~~~~0.0.1.0',
+            'Rsat.NetworkLoadBalancing.Tools~~~~0.0.1.0',
+            'Rsat.RemoteAccess.Management.Tools~~~~0.0.1.0',
+            'Rsat.RemoteDesktop.Services.Tools~~~~0.0.1.0',
             'Rsat.ServerManager.Tools~~~~0.0.1.0',
-            'WMI-SNMP-Provider.Client~~~~0.0.1.0',   # SNMP WMI Provider
-            'XPS.Viewer~~~~0.0.1.0'                  # XPS Viewer
+            'Rsat.Shielded.VM.Tools~~~~0.0.1.0',
+            'Rsat.StorageReplica.Tools~~~~0.0.1.0',
+            'Rsat.VolumeActivation.Tools~~~~0.0.1.0',
+            'Rsat.WSUS.Tools~~~~0.0.1.0',
+            
+            # Windows Mixed Reality (removed in 24H2)
+            'Analog.Holographic.Desktop~~~~0.0.1.0', # Mixed Reality Portal
+            'Microsoft.Windows.HolographicFirstRun~~~~0.0.1.0',
+            
+            # Internet Explorer features
+            'Internet-Explorer-Optional-amd64~~~~0.0.11.0',
+            
+            # Windows Subsystem for Linux (if not needed)
+            'Microsoft.Windows.Subsystem.Linux~~~~0.0.1.0',
+            
+            # Developer features (if not needed)
+            'Microsoft.Windows.StorageManagement~~~~0.0.1.0',
+            
+            # Additional Windows 11 24H2/25H2 specific features
+            'DirectX.Configuration.Database.Management.Tool~~~~0.0.1.0',
+            'Microsoft.Accessibility.Braille~~~~0.0.1.0',
+            'Microsoft.Windows.Ethernet.CS.Cmdlets~~~~0.0.1.0',
+            'Microsoft.Windows.FodMetadata.Foundation~~~~0.0.1.0',
+            'Microsoft.Windows.MSHybrid~~~~0.0.1.0',
+            'Microsoft.Windows.NetFx3~~~~0.0.1.0',
+            'Microsoft.Windows.Wifi.Client.Intel.Ihv~~~~0.0.1.0',
+            'Microsoft.Windows.Wifi.Client.Marvel.Ihv~~~~0.0.1.0',
+            'Microsoft.Windows.Wifi.Client.Qualcomm.Ihv~~~~0.0.1.0',
+            'Microsoft.Windows.Wifi.Client.Ralink.Ihv~~~~0.0.1.0',
+            'Microsoft.Windows.Wifi.Client.Realtek.Ihv~~~~0.0.1.0'
         )
         
         Write-Log "Checking available Features on Demand..." -Level Info
@@ -1419,6 +1528,176 @@ function Remove-AdditionalSystemFiles {
     }
     catch {
         Write-Log "Additional system file removal failed: $($_.Exception.Message)" -Level Error
+        return $false
+    }
+}
+
+function Optimize-LanguagePackSettings {
+    <#
+    .SYNOPSIS
+        Optimizes language pack settings and controls automatic cleanup for 2024-2025 enhancement
+        
+    .PARAMETER MountPath
+        Path to the mounted Windows image
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$MountPath
+    )
+    
+    Write-Log "Optimizing language pack settings and cleanup control..." -Level Info
+    
+    try {
+        # Load SYSTEM and SOFTWARE hives for language optimization
+        $systemHivePath = "$MountPath\Windows\System32\config\SYSTEM"
+        $softwareHivePath = "$MountPath\Windows\System32\config\SOFTWARE"
+        
+        # Unload any existing hives
+        & reg unload HKLM\zSYSTEM 2>&1 | Out-Null
+        & reg unload HKLM\zSOFTWARE 2>&1 | Out-Null
+        Start-Sleep -Seconds 1
+        
+        # Load SYSTEM hive
+        if (Test-Path $systemHivePath) {
+            $loadResult = & reg load HKLM\zSYSTEM "$systemHivePath" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "SYSTEM hive loaded for language optimization" -Level Info
+                
+                # Disable automatic language pack cleanup task
+                Write-Log "Disabling automatic language pack removal task..." -Level Info
+                try {
+                    & reg add 'HKLM\zSOFTWARE\Microsoft\Windows\ScheduledToastNotification' /f 2>&1 | Out-Null
+                    & reg add 'HKLM\zSOFTWARE\Policies\Microsoft\Control Panel\International' /v 'BlockCleanupOfUnusedPreinstalledLangPacks' /t REG_DWORD /d 1 /f 2>&1 | Out-Null
+                    Write-Log "Automatic language pack cleanup disabled" -Level Success
+                }
+                catch {
+                    Write-Log "Failed to disable language pack cleanup: $($_.Exception.Message)" -Level Warning
+                }
+                
+                # Optimize MUI settings for primary language only
+                Write-Log "Optimizing MUI settings for primary language..." -Level Info
+                try {
+                    & reg add 'HKLM\zSYSTEM\ControlSet001\Control\Nls\Language' /v 'InstallLanguage' /t REG_SZ /d '0409' /f 2>&1 | Out-Null
+                    & reg add 'HKLM\zSYSTEM\ControlSet001\Control\Nls\Language' /v 'Default' /t REG_SZ /d '0409' /f 2>&1 | Out-Null
+                    Write-Log "MUI settings optimized for English (0409)" -Level Success
+                }
+                catch {
+                    Write-Log "Failed to optimize MUI settings: $($_.Exception.Message)" -Level Warning
+                }
+                
+                # Unload SYSTEM hive
+                & reg unload HKLM\zSYSTEM 2>&1 | Out-Null
+            }
+        }
+        
+        # Load SOFTWARE hive for additional language optimizations
+        if (Test-Path $softwareHivePath) {
+            $loadResult = & reg load HKLM\zSOFTWARE "$softwareHivePath" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "SOFTWARE hive loaded for language optimization" -Level Info
+                
+                # Disable Windows Update language experience pack downloads
+                Write-Log "Disabling automatic language experience pack downloads..." -Level Info
+                try {
+                    & reg add 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' /v 'DoNotConnectToWindowsUpdateInternetLocations' /t REG_DWORD /d 1 /f 2>&1 | Out-Null
+                    & reg add 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' /v 'NoAutoUpdate' /t REG_DWORD /d 0 /f 2>&1 | Out-Null
+                    Write-Log "Language experience pack auto-download disabled" -Level Success
+                }
+                catch {
+                    Write-Log "Failed to disable language pack auto-download: $($_.Exception.Message)" -Level Warning
+                }
+                
+                # Remove unused keyboard layouts to save space
+                Write-Log "Removing unused keyboard layouts..." -Level Info
+                $keyboardsToKeep = @('00000409', '00000809')  # US and UK English
+                try {
+                    $keyboardLayouts = @(
+                        '0000040C', '00000407', '0000040A', '00000410', # French, German, Spanish, Italian
+                        '00000416', '00000413', '0000041D', '0000041F', # Portuguese, Dutch, Swedish, Turkish
+                        '00000419', '00000411', '00000412', '00000804', # Russian, Japanese, Korean, Chinese
+                        '00000405', '00000406', '0000040E', '0000040F'  # Czech, Danish, Hungarian, Icelandic
+                    )
+                    
+                    foreach ($layout in $keyboardLayouts) {
+                        & reg delete "HKLM\zSYSTEM\ControlSet001\Control\Keyboard Layouts\$layout" /f 2>&1 | Out-Null
+                    }
+                    Write-Log "Unused keyboard layouts removed" -Level Success
+                }
+                catch {
+                    Write-Log "Failed to remove keyboard layouts: $($_.Exception.Message)" -Level Warning
+                }
+                
+                # Unload SOFTWARE hive
+                & reg unload HKLM\zSOFTWARE 2>&1 | Out-Null
+            }
+        }
+        
+        # Remove unused language resource files
+        Write-Log "Removing unused language resource files..." -Level Info
+        $langDirectories = @(
+            "$MountPath\Windows\System32\ar-SA",
+            "$MountPath\Windows\System32\bg-BG",
+            "$MountPath\Windows\System32\cs-CZ",
+            "$MountPath\Windows\System32\da-DK",
+            "$MountPath\Windows\System32\de-DE",
+            "$MountPath\Windows\System32\el-GR",
+            "$MountPath\Windows\System32\es-ES",
+            "$MountPath\Windows\System32\et-EE",
+            "$MountPath\Windows\System32\fi-FI",
+            "$MountPath\Windows\System32\fr-FR",
+            "$MountPath\Windows\System32\he-IL",
+            "$MountPath\Windows\System32\hr-HR",
+            "$MountPath\Windows\System32\hu-HU",
+            "$MountPath\Windows\System32\it-IT",
+            "$MountPath\Windows\System32\ja-JP",
+            "$MountPath\Windows\System32\ko-KR",
+            "$MountPath\Windows\System32\lt-LT",
+            "$MountPath\Windows\System32\lv-LV",
+            "$MountPath\Windows\System32\nb-NO",
+            "$MountPath\Windows\System32\nl-NL",
+            "$MountPath\Windows\System32\pl-PL",
+            "$MountPath\Windows\System32\pt-BR",
+            "$MountPath\Windows\System32\pt-PT",
+            "$MountPath\Windows\System32\ro-RO",
+            "$MountPath\Windows\System32\ru-RU",
+            "$MountPath\Windows\System32\sk-SK",
+            "$MountPath\Windows\System32\sl-SI",
+            "$MountPath\Windows\System32\sr-Latn-RS",
+            "$MountPath\Windows\System32\sv-SE",
+            "$MountPath\Windows\System32\th-TH",
+            "$MountPath\Windows\System32\tr-TR",
+            "$MountPath\Windows\System32\uk-UA",
+            "$MountPath\Windows\System32\zh-CN",
+            "$MountPath\Windows\System32\zh-TW"
+        )
+        
+        $removedDirs = 0
+        foreach ($langDir in $langDirectories) {
+            if (Test-Path $langDir) {
+                try {
+                    Remove-Item -Path $langDir -Recurse -Force
+                    $removedDirs++
+                }
+                catch {
+                    Write-Log "Could not remove language directory $langDir`: $($_.Exception.Message)" -Level Warning
+                }
+            }
+        }
+        
+        if ($removedDirs -gt 0) {
+            Write-Log "Removed $removedDirs unused language resource directories" -Level Success
+        }
+        
+        Write-Log "Language pack optimization completed successfully" -Level Success
+        return $true
+    }
+    catch {
+        Write-Log "Language pack optimization failed: $($_.Exception.Message)" -Level Error
+        
+        # Ensure hives are unloaded on error
+        & reg unload HKLM\zSYSTEM 2>&1 | Out-Null
+        & reg unload HKLM\zSOFTWARE 2>&1 | Out-Null
+        
         return $false
     }
 }

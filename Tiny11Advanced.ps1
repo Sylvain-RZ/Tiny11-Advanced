@@ -149,10 +149,10 @@ function Show-Banner {
 |                              Version 1.0                                     |
 +==============================================================================+
 |  Creates optimized Windows 11 images with advanced debloating features       |
-|  • Removes bloatware and telemetry                                           |
-|  • Preserves Windows Update & Store                                          |
-|  • Advanced anti-reinstallation methods                                      |
-|  • Professional code architecture                                            |
+|  - Removes bloatware and telemetry                                           |
+|  - Preserves Windows Update & Store                                          |
+|  - Advanced anti-reinstallation methods                                      |
+|  - Professional code architecture                                            |
 +==============================================================================+
 
 "@ -ForegroundColor Cyan

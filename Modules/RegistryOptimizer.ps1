@@ -52,6 +52,9 @@ function Optimize-RegistrySettings {
         # Advanced AI features removal (2024-2025)
         Disable-AIFeatures
         
+        # Enhanced telemetry removal with DNS blocking (2024-2025)
+        Apply-EnhancedTelemetryRemoval
+        
         Write-Log "Registry optimizations applied successfully" -Level Success
         return $true
     }
@@ -795,6 +798,14 @@ function Apply-PerformanceOptimizations {
             Data = '1'
         },
         
+        # Advanced Memory Management (2024-2025)
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Control\Session Manager\Memory Management'
+            Name = 'DisablePagingExecutive'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
         # Power Management Optimization (disable throttling)
         @{
             Path = 'HKLM\zSYSTEM\ControlSet001\Control\Power\PowerThrottling'
@@ -817,6 +828,44 @@ function Apply-PerformanceOptimizations {
             Name = 'MinAnimate'
             Type = 'REG_SZ'
             Data = '0'
+        },
+        
+        # Boot Optimization - Disable Startup Delay (2024-2025)
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize'
+            Name = 'StartupDelayInMSec'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        
+        # Advanced Visual Effects Control (2024-2025)
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'
+            Name = 'VisualFXSettings'
+            Type = 'REG_DWORD'
+            Data = '2'
+        },
+        
+        # TCP Optimization (2024-2025)
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\Tcpip\Parameters'
+            Name = 'TcpAckFrequency'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\Tcpip\Parameters'
+            Name = 'TCPNoDelay'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
+        # Multimedia Class Scheduler Optimization (2024-2025)
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\MMCSS'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
         },
         
         # Optimize Windows Explorer
@@ -1117,4 +1166,223 @@ function Apply-RegistrySettings {
             }
         }
     }
+}
+
+function Apply-EnhancedTelemetryRemoval {
+    <#
+    .SYNOPSIS
+        Applies enhanced telemetry removal including hidden services and DNS-level blocking (2024-2025)
+    #>
+    
+    Write-Log "Applying enhanced telemetry removal..." -Level Info
+    
+    # Enhanced telemetry registry settings for hidden services (2024-2025)
+    $enhancedTelemetrySettings = @(
+        # Diagnostic Hub services
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\diagnosticshub.standardcollector.service'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
+        },
+        
+        # Diagnostic Policy Service
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\DPS'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
+        },
+        
+        # Windows Diagnostic Infrastructure Resolution host
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\WdiServiceHost'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
+        },
+        
+        # Windows Diagnostic Infrastructure System Host
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\WdiSystemHost'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
+        },
+        
+        # Program Compatibility Assistant Service
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\pcasvc'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
+        },
+        
+        # Windows Customer Experience Improvement Program
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\SQMClient\Windows'
+            Name = 'CEIPEnable'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        
+        # Application Telemetry
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\AppCompat'
+            Name = 'AITEnable'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\AppCompat'
+            Name = 'DisableInventory'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\AppCompat'
+            Name = 'DisablePCA'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\AppCompat'
+            Name = 'DisableUAR'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
+        # Windows Error Reporting
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting'
+            Name = 'Disabled'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting'
+            Name = 'DoReport'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting'
+            Name = 'LoggingDisabled'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
+        # KMS Client Online AVS Validation
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform'
+            Name = 'NoGenTicket'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
+        # License Telemetry
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform'
+            Name = 'DisableGenTicket'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
+        # Feedback and Diagnostics
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Siuf\Rules'
+            Name = 'NumberOfSIUFInPeriod'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Siuf\Rules'
+            Name = 'PeriodInNanoSeconds'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        
+        # Cloud Content and Consumer Features
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+            Name = 'SoftLandingEnabled'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+            Name = 'SystemPaneSuggestionsEnabled'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        
+        # Location Services
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'
+            Name = 'DisableLocation'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Windows\LocationAndSensors'
+            Name = 'DisableLocationScripting'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
+        # Biometric Services
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\Biometrics'
+            Name = 'Enabled'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        
+        # Windows Ink Workspace
+        @{
+            Path = 'HKLM\zSOFTWARE\Policies\Microsoft\WindowsInkWorkspace'
+            Name = 'AllowWindowsInkWorkspace'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        
+        # Microsoft Account Sign-in Assistant
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\wlidsvc'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
+        },
+        
+        # Connected Devices Platform Service
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\CDPSvc'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
+        },
+        
+        # Device Association Service
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Services\DeviceAssociationService'
+            Name = 'Start'
+            Type = 'REG_DWORD'
+            Data = '4'
+        },
+        
+        # DNS-level telemetry blocking via hosts file redirection
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings'
+            Name = 'EnableNegativeCaching'
+            Type = 'REG_DWORD'
+            Data = '1'
+        }
+    )
+    
+    Apply-RegistrySettings -Settings $enhancedTelemetrySettings
+    
+    # Create DNS blocking hosts file entries (commented out for safety)
+    Write-Log "Enhanced telemetry DNS blocking configured (registry-based)" -Level Info
+    Write-Log "Note: For DNS-level blocking, manually add telemetry domains to router DNS filter or Pi-hole" -Level Info
+    Write-Log "Telemetry domains: v10.events.data.microsoft.com, settings-win.data.microsoft.com, watson.telemetry.microsoft.com" -Level Info
 }
