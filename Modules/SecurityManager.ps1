@@ -29,7 +29,7 @@ function Disable-WindowsDefender {
     Write-Log "NOTE: Windows Defender can be re-enabled by the user after installation" -Level Info
     
     try {
-        # Check if SYSTEM hive is already mounted
+        # Mount SYSTEM hive if not already mounted
         $systemHiveAvailable = $false
         try {
             $null = & reg query "HKLM\zSYSTEM" 2>$null
@@ -40,9 +40,22 @@ function Disable-WindowsDefender {
         }
         
         if (-not $systemHiveAvailable) {
-            Write-Log "SYSTEM registry hive not available, skipping service configuration" -Level Warning
+            $systemHivePath = "$MountPath\Windows\System32\config\SYSTEM"
+            if (Test-Path $systemHivePath) {
+                Write-Log "Loading SYSTEM hive for Defender service configuration..." -Level Info
+                $loadResult = & reg load HKLM\zSYSTEM "$systemHivePath" 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    $systemHiveAvailable = $true
+                    Write-Log "SYSTEM hive loaded successfully" -Level Info
+                } else {
+                    Write-Log "Failed to load SYSTEM hive: $loadResult" -Level Warning
+                }
+            } else {
+                Write-Log "SYSTEM hive file not found at $systemHivePath" -Level Warning
+            }
         }
-        else {
+        
+        if ($systemHiveAvailable) {
             # Disable Windows Defender services (but don't remove them)
             $defenderServices = @(
                 'WinDefend',        # Windows Defender Antivirus Service
@@ -83,6 +96,22 @@ function Disable-WindowsDefender {
     catch {
         Write-Log "Failed to disable Windows Defender: $($_.Exception.Message)" -Level Error
         return $false
+    }
+    finally {
+        # Ensure SYSTEM hive is unloaded if we loaded it
+        try {
+            $null = & reg query "HKLM\zSYSTEM" 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "Unloading SYSTEM hive..." -Level Info
+                Start-Sleep -Seconds 1
+                $unloadResult = & reg unload HKLM\zSYSTEM 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Log "Warning: Failed to unload SYSTEM hive: $unloadResult" -Level Warning
+                }
+            }
+        } catch {
+            Write-Log "Error during SYSTEM hive cleanup: $($_.Exception.Message)" -Level Warning
+        }
     }
 }
 
