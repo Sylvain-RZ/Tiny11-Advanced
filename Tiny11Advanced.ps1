@@ -31,11 +31,14 @@
 .PARAMETER SkipWinSxS
     Skip WinSxS optimization for faster processing (avoids potential hanging)
 
+.PARAMETER AggressiveWinSxS
+    Enable aggressive WinSxS cleanup with /ResetBase (WARNING: breaks language packs and Windows updates)
+
 .PARAMETER RemoveAdditionalLanguages
     Remove additional language packs while preserving primary language
     
 .EXAMPLE
-    .\Tiny11Advanced.ps1 -SourcePath "D:" -EnableDotNet35 -DisableDefender -SkipWinSxS -RemoveAdditionalLanguages
+    .\Tiny11Advanced.ps1 -SourcePath "D:" -EnableDotNet35 -DisableDefender -AggressiveWinSxS -RemoveAdditionalLanguages
     
 .NOTES
     Version: 1.0
@@ -80,6 +83,9 @@ param(
     
     [Parameter(Mandatory = $false)]
     [switch]$SkipWinSxS,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$AggressiveWinSxS,
     
     [Parameter(Mandatory = $false)]
     [switch]$RemoveAdditionalLanguages
@@ -287,7 +293,7 @@ function Start-ProcessingWorkflow {
         
         # Step 6: System optimizations
         Write-Log "Step 6/8: Applying system optimizations..." -Level Info
-        Optimize-SystemSettings -MountPath $Global:ScratchDirectory -EnableDotNet35:$EnableDotNet35 -SkipWinSxS:$SkipWinSxS
+        Optimize-SystemSettings -MountPath $Global:ScratchDirectory -EnableDotNet35:$EnableDotNet35 -SkipWinSxS:$SkipWinSxS -AggressiveWinSxS:$AggressiveWinSxS
         
         # Step 7: Security optimizations
         Write-Log "Step 7/8: Configuring security settings..." -Level Info

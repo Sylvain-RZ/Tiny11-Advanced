@@ -156,7 +156,35 @@ function Get-BloatwarePackageList {
         'Microsoft.Paint',
         'Microsoft.WindowsCamera',
         'Microsoft.WindowsPhotos',
-        'Microsoft.WindowsCalculator'
+        'Microsoft.WindowsCalculator',
+        
+        # AI/Copilot Applications (2024-2025)
+        'Microsoft.Copilot',
+        'Microsoft.Windows.Copilot',
+        'Microsoft.WindowsCopilot',
+        'Microsoft.CopilotApp',
+        'Microsoft.Windows.Ai.Copilot.Provider',
+        'Microsoft.Windows.AppRuntime.1.4',
+        'Microsoft.Windows.AppRuntime.1.5',
+        'Microsoft.WindowsAppRuntime.1.4',
+        'Microsoft.WindowsAppRuntime.1.5',
+        
+        # New Teams and Communication (2024-2025)
+        'MSTeams',
+        'Microsoft.TeamsMeetingAddin',
+        'Microsoft.TeamsPresenceProvider',
+        
+        # Additional Modern Bloatware (2024-2025)
+        'Microsoft.BingSearch',
+        'Microsoft.BingTranslator',
+        'Microsoft.BingFinance',
+        'Microsoft.MicrosoftStickyNotes',
+        'Microsoft.WindowsWebExperience',
+        'Microsoft.CrossDevice',
+        'Microsoft.DiagnosticDataViewer',
+        'Microsoft.Windows.CloudExperienceHost',
+        'Microsoft.Windows.ContentDeliveryManager',
+        'Microsoft.Windows.ParentalControls'
     )
 }
 

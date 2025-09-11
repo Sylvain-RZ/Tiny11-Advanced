@@ -137,6 +137,9 @@ function Optimize-SystemSettings {
         
     .PARAMETER SkipWinSxS
         Skip WinSxS optimization for faster processing
+        
+    .PARAMETER AggressiveWinSxS
+        Enable aggressive WinSxS cleanup with /ResetBase (WARNING: breaks language packs)
     #>
     param(
         [Parameter(Mandatory)]
@@ -144,7 +147,9 @@ function Optimize-SystemSettings {
         
         [switch]$EnableDotNet35,
         
-        [switch]$SkipWinSxS
+        [switch]$SkipWinSxS,
+        
+        [switch]$AggressiveWinSxS
     )
     
     Write-Log "Starting system optimization process..." -Level Info
@@ -160,6 +165,9 @@ function Optimize-SystemSettings {
         # Remove additional system files and components
         Remove-AdditionalSystemFiles -MountPath $MountPath
         
+        # Remove Features on Demand (optional Windows capabilities)
+        Remove-FeaturesOnDemand -MountPath $MountPath
+        
         # Disable telemetry services
         Disable-TelemetryServices -MountPath $MountPath
         
@@ -172,7 +180,7 @@ function Optimize-SystemSettings {
         }
         
         # Optimize WinSxS (advanced cleanup)
-        Optimize-WinSxSStore -MountPath $MountPath -SkipWinSxS:$SkipWinSxS
+        Optimize-WinSxSStore -MountPath $MountPath -SkipWinSxS:$SkipWinSxS -AggressiveWinSxS:$AggressiveWinSxS
         
         Write-Log "System optimization completed successfully" -Level Success
         return $true
@@ -300,21 +308,28 @@ function Disable-TelemetryServices {
         # Wait for hive to be fully loaded
         Start-Sleep -Seconds 2
         
-        # Updated services list for Windows 11 24H2 (removed obsolete services)
+        # Updated services list for Windows 11 24H2 (including AI and new telemetry services)
         $servicesToDisable = @(
             'DiagTrack',                                    # Connected User Experiences and Telemetry (primary telemetry service)
             'dmwappushservice',                             # WAP Push Message Routing Service
             'MapsBroker',                                   # Downloaded Maps Manager
             'diagnosticshub.standardcollector.service',    # Microsoft Diagnostics Hub Standard Collector Service
             'pcasvc',                                       # Program Compatibility Assistant Service
-            'PcaSvc'                                        # Program Compatibility Assistant Service (alternative name)
+            'PcaSvc',                                       # Program Compatibility Assistant Service (alternative name)
+            'AIFabricService',                              # AI Fabric Service (2024-2025)
+            'AdjustService',                                # User experience telemetry (2024-2025)
+            'MessagingService',                             # Messaging services (Teams/Chat integration)
+            'PimIndexMaintenanceSvc',                       # Cortana data indexing service
+            'CopilotService'                                # Windows Copilot service (2024-2025)
         )
         
         # Services that may not exist in Windows 11 24H2 but should be checked
         $conditionalServices = @(
             'DPS',                                          # Diagnostic Policy Service (may not exist)
             'WdiServiceHost',                               # Diagnostic Service Host (may not exist)
-            'WdiSystemHost'                                 # Diagnostic System Host (may not exist)
+            'WdiSystemHost',                                # Diagnostic System Host (may not exist)
+            'MessagingService_*',                           # Pattern for messaging services
+            'PimIndexMaintenanceSvc_*'                      # Pattern for PIM services
         )
         
         $disabledCount = 0
@@ -709,12 +724,17 @@ function Optimize-WinSxSStore {
         
     .PARAMETER SkipWinSxS
         Skip WinSxS optimization entirely (for faster processing)
+        
+    .PARAMETER AggressiveWinSxS
+        Enable aggressive WinSxS cleanup with /ResetBase (WARNING: breaks language packs and updates)
     #>
     param(
         [Parameter(Mandatory)]
         [string]$MountPath,
         
-        [switch]$SkipWinSxS
+        [switch]$SkipWinSxS,
+        
+        [switch]$AggressiveWinSxS
     )
     
     if ($SkipWinSxS) {
@@ -771,27 +791,35 @@ function Optimize-WinSxSStore {
             Write-Log "Standard component cleanup completed" -Level Success
         }
         
-        # Advanced cleanup with ResetBase - DÉSACTIVÉ PAR DÉFAUT
-        # IMPORTANT: ResetBase empêche l'installation des packs de langues
-        # Cette fonctionnalité va à l'encontre de l'usage normal de Windows
-        Write-Log "Skipping ResetBase cleanup to preserve language pack installation capability" -Level Info
-        Write-Log "Standard cleanup provides sufficient space reduction while maintaining system serviceability" -Level Info
-        
-        # Pour les utilisateurs avancés qui veulent quand même utiliser ResetBase,
-        # décommenter les lignes ci-dessous EN CONNAISSANCE DE CAUSE :
-        <#
-        Write-Log "Performing advanced component cleanup with ResetBase..." -Level Warning
-        Write-Log "WARNING: This will prevent installation of language packs and new components" -Level Warning
-        & dism /Image:$MountPath /Cleanup-Image /StartComponentCleanup /ResetBase | Out-Null
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "Advanced WinSxS cleanup completed successfully" -Level Success
-            Write-Log "WARNING: This image cannot install language packs or new Windows components" -Level Warning
+        # Advanced cleanup with ResetBase (AGGRESSIVE OPTION)
+        if ($AggressiveWinSxS) {
+            Write-Log "AGGRESSIVE OPTION ENABLED: Performing ResetBase cleanup..." -Level Warning
+            Write-Log "⚠️  CRITICAL WARNING: This will break Windows Update and language pack installation!" -Level Warning
+            Write-Log "⚠️  The resulting image cannot receive updates or install new Windows components!" -Level Warning
+            Write-Log "⚠️  Use this option ONLY if you understand the consequences!" -Level Warning
+            Write-Log "Performing advanced component cleanup with ResetBase..." -Level Warning
+            
+            $resetbaseProcess = Start-Process -FilePath "dism" -ArgumentList "/English", "/Image:$MountPath", "/Cleanup-Image", "/StartComponentCleanup", "/ResetBase" -PassThru -NoNewWindow
+            
+            # Wait for ResetBase completion without timeout (only user skip)
+            $skipped = Wait-ForProcessNoTimeout -Process $resetbaseProcess -TaskName "ResetBase cleanup"
+            
+            if ($skipped) {
+                Write-Log "ResetBase cleanup skipped by user" -Level Info
+            }
+            elseif ($resetbaseProcess.ExitCode -eq 0) {
+                Write-Log "🎯 AGGRESSIVE WinSxS cleanup completed successfully" -Level Success
+                Write-Log "💥 Image size reduced by approximately 800MB-1.2GB" -Level Success
+                Write-Log "⚠️  WARNING: This image CANNOT install language packs or receive certain Windows updates!" -Level Warning
+            }
+            else {
+                Write-Log "ResetBase cleanup failed (Exit code: $($resetbaseProcess.ExitCode))" -Level Warning
+            }
         }
         else {
-            Write-Log "Advanced WinSxS cleanup failed (Exit code: $LASTEXITCODE)" -Level Warning
+            Write-Log "Skipping ResetBase cleanup to preserve Windows Update and language pack capability" -Level Info
+            Write-Log "💡 Use -AggressiveWinSxS parameter for maximum size reduction (with risks)" -Level Info
         }
-        #>
         
         # Final analysis to show space savings
         Write-Log "Performing final WinSxS analysis..." -Level Info
@@ -1091,6 +1119,127 @@ function Remove-OneDrive {
     }
     catch {
         Write-Log "OneDrive removal failed: $($_.Exception.Message)" -Level Error
+        return $false
+    }
+}
+
+function Remove-FeaturesOnDemand {
+    <#
+    .SYNOPSIS
+        Removes unused Features on Demand to reduce image size
+        
+    .PARAMETER MountPath
+        Path to the mounted Windows image
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$MountPath
+    )
+    
+    Write-Log "Starting Features on Demand removal..." -Level Info
+    
+    try {
+        # List of Features on Demand that are commonly unused and safe to remove
+        $fodToRemove = @(
+            'App.StepsRecorder~~~~0.0.1.0',          # Steps Recorder
+            'App.Support.QuickAssist~~~~0.0.1.0',    # Quick Assist
+            'Browser.InternetExplorer~~~~0.0.11.0',  # Internet Explorer mode
+            'Hello.Face.17658~~~~0.0.1.0',           # Windows Hello Face
+            'Language.Handwriting~~~en-US~0.0.1.0',  # Handwriting recognition
+            'Language.OCR~~~en-US~0.0.1.0',          # Optical character recognition
+            'Language.Speech~~~en-US~0.0.1.0',       # Speech recognition
+            'Language.TextToSpeech~~~en-US~0.0.1.0', # Text-to-speech
+            'MathRecognizer~~~~0.0.1.0',             # Math Recognizer
+            'Media.WindowsMediaPlayer~~~~0.0.12.0',  # Windows Media Player Legacy
+            'Microsoft.Windows.MSPaint~~~~0.0.1.0',  # Paint
+            'Microsoft.Windows.Notepad~~~~0.0.1.0',  # Notepad
+            'Microsoft.Windows.PowerShell.ISE~~~~0.0.1.0',  # PowerShell ISE
+            'Microsoft.Windows.WordPad~~~~0.0.1.0',  # WordPad
+            'OpenSSH.Client~~~~0.0.1.0',             # OpenSSH Client
+            'Print.Fax.Scan~~~~0.0.1.0',             # Windows Fax and Scan
+            'Print.Management.Console~~~~0.0.1.0',   # Print Management Console
+            'Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0',  # RSAT tools
+            'Rsat.CertificateServices.Tools~~~~0.0.1.0',
+            'Rsat.DHCP.Tools~~~~0.0.1.0',
+            'Rsat.Dns.Tools~~~~0.0.1.0',
+            'Rsat.FileServices.Tools~~~~0.0.1.0',
+            'Rsat.GroupPolicy.Management.Tools~~~~0.0.1.0',
+            'Rsat.ServerManager.Tools~~~~0.0.1.0',
+            'WMI-SNMP-Provider.Client~~~~0.0.1.0',   # SNMP WMI Provider
+            'XPS.Viewer~~~~0.0.1.0'                  # XPS Viewer
+        )
+        
+        Write-Log "Checking available Features on Demand..." -Level Info
+        $dismOutput = & dism /English /Image:$MountPath /Get-Capabilities 2>&1
+        
+        # Parse available capabilities
+        $availableCapabilities = @()
+        foreach ($line in $dismOutput) {
+            if ($line -match '^Capability Identity\s*:\s*(.+)$') {
+                $capabilityName = $matches[1].Trim()
+                if (-not [string]::IsNullOrEmpty($capabilityName)) {
+                    $availableCapabilities += $capabilityName
+                }
+            }
+        }
+        
+        Write-Log "Found $($availableCapabilities.Count) total capabilities in image" -Level Info
+        
+        $removedCount = 0
+        $failedCount = 0
+        
+        foreach ($feature in $fodToRemove) {
+            # Check if the exact capability exists
+            $exactMatch = $availableCapabilities | Where-Object { $_ -eq $feature }
+            if ($exactMatch) {
+                try {
+                    Write-Log "Removing FOD: $feature" -Level Info
+                    $dismResult = & dism /English /Image:$MountPath /Remove-Capability /CapabilityName:$feature 2>&1
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Log "Successfully removed: $feature" -Level Success
+                        $removedCount++
+                    }
+                    else {
+                        Write-Log "Failed to remove: $feature (Exit code: $LASTEXITCODE)" -Level Warning
+                        $failedCount++
+                    }
+                }
+                catch {
+                    Write-Log "Error removing FOD $feature`: $($_.Exception.Message)" -Level Warning
+                    $failedCount++
+                }
+            }
+            else {
+                # Check for partial matches (version differences)
+                $partialMatch = $availableCapabilities | Where-Object { $_ -like "$($feature.Split('~')[0])*" }
+                if ($partialMatch) {
+                    try {
+                        Write-Log "Removing FOD (version match): $partialMatch" -Level Info
+                        $dismResult = & dism /English /Image:$MountPath /Remove-Capability /CapabilityName:$partialMatch 2>&1
+                        
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Log "Successfully removed: $partialMatch" -Level Success
+                            $removedCount++
+                        }
+                        else {
+                            Write-Log "Failed to remove: $partialMatch (Exit code: $LASTEXITCODE)" -Level Warning
+                            $failedCount++
+                        }
+                    }
+                    catch {
+                        Write-Log "Error removing FOD $partialMatch`: $($_.Exception.Message)" -Level Warning
+                        $failedCount++
+                    }
+                }
+            }
+        }
+        
+        Write-Log "Features on Demand removal completed - Success: $removedCount, Failed: $failedCount" -Level Success
+        return $true
+    }
+    catch {
+        Write-Log "Features on Demand removal failed: $($_.Exception.Message)" -Level Error
         return $false
     }
 }

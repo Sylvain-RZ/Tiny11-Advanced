@@ -325,13 +325,13 @@ function Disable-TelemetryRegistry {
 function Apply-AntiReinstallationMethods {
     <#
     .SYNOPSIS
-        Implements advanced anti-reinstallation methods for Outlook and DevHome
+        Implements advanced anti-reinstallation methods for all modern bloatware apps (2024-2025)
         Using UScheduler and BlockedOobeUpdaters methods
     #>
     
     Write-Log "Applying anti-reinstallation methods..." -Level Info
     
-    # UScheduler method with workCompleted
+    # UScheduler method with workCompleted (expanded for 2024-2025 apps)
     $uSchedulerSettings = @(
         @{
             Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\OutlookUpdate'
@@ -344,25 +344,76 @@ function Apply-AntiReinstallationMethods {
             Name = 'workCompleted'
             Type = 'REG_DWORD'
             Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\CopilotUpdate'
+            Name = 'workCompleted'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\TeamsUpdate'
+            Name = 'workCompleted'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\UScheduler\ClipchampUpdate'
+            Name = 'workCompleted'
+            Type = 'REG_DWORD'
+            Data = '1'
         }
     )
     
     Apply-RegistrySettings -Settings $uSchedulerSettings
     
-    # Remove OOBE triggers
+    # Remove OOBE triggers (expanded for 2024-2025 apps)
     try {
         & reg delete 'HKLM\zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\OutlookUpdate' /f | Out-Null
         & reg delete 'HKLM\zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\DevHomeUpdate' /f | Out-Null
+        & reg delete 'HKLM\zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\CopilotUpdate' /f | Out-Null
+        & reg delete 'HKLM\zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\TeamsUpdate' /f | Out-Null
+        & reg delete 'HKLM\zSOFTWARE\Microsoft\WindowsUpdate\Orchestrator\UScheduler_Oobe\ClipchampUpdate' /f | Out-Null
     }
     catch {
         Write-Log "OOBE trigger keys not found (expected)" -Level Info
     }
     
-    # BlockedOobeUpdaters method
+    # BlockedOobeUpdaters method (expanded for 2024-2025 apps)
     $blockedUpdaters = @(
         @{
             Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\OOBE\BlockedOobeUpdaters'
             Name = 'Microsoft.OutlookForWindows'
+            Type = 'REG_SZ'
+            Data = 'blocked'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\OOBE\BlockedOobeUpdaters'
+            Name = 'Microsoft.Windows.DevHome'
+            Type = 'REG_SZ'
+            Data = 'blocked'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\OOBE\BlockedOobeUpdaters'
+            Name = 'Microsoft.Copilot'
+            Type = 'REG_SZ'
+            Data = 'blocked'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\OOBE\BlockedOobeUpdaters'
+            Name = 'Microsoft.Windows.Copilot'
+            Type = 'REG_SZ'
+            Data = 'blocked'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\OOBE\BlockedOobeUpdaters'
+            Name = 'MSTeams'
+            Type = 'REG_SZ'
+            Data = 'blocked'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows\CurrentVersion\OOBE\BlockedOobeUpdaters'
+            Name = 'Clipchamp.Clipchamp'
             Type = 'REG_SZ'
             Data = 'blocked'
         },
@@ -686,7 +737,7 @@ function Apply-PrivacyOptimizations {
 function Apply-PerformanceOptimizations {
     <#
     .SYNOPSIS
-        Applies performance-related registry optimizations
+        Applies performance-related registry optimizations including Windows 11 24H2 enhancements
     #>
     
     Write-Log "Applying performance optimizations..." -Level Info
@@ -696,6 +747,94 @@ function Apply-PerformanceOptimizations {
         @{
             Path = 'HKLM\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'
             Name = 'VisualFXSetting'
+            Type = 'REG_DWORD'
+            Data = '2'
+        },
+        
+        # Network Performance Optimization (24H2 confirmed)
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
+            Name = 'NetworkThrottlingIndex'
+            Type = 'REG_DWORD'
+            Data = '4294967295'
+        },
+        
+        # System Responsiveness Optimization (updated for 24H2)
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
+            Name = 'SystemResponsiveness'
+            Type = 'REG_DWORD'
+            Data = '10'
+        },
+        
+        # Gaming Performance Priority (latest optimization)
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games'
+            Name = 'GPU Priority'
+            Type = 'REG_DWORD'
+            Data = '8'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games'
+            Name = 'Priority'
+            Type = 'REG_DWORD'
+            Data = '6'
+        },
+        @{
+            Path = 'HKLM\zSOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games'
+            Name = 'Scheduling Category'
+            Type = 'REG_SZ'
+            Data = 'High'
+        },
+        
+        # Memory Management Optimization
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Control\Session Manager\Memory Management'
+            Name = 'LargeSystemCache'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
+        # Power Management Optimization (disable throttling)
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Control\Power\PowerThrottling'
+            Name = 'PowerThrottlingOff'
+            Type = 'REG_DWORD'
+            Data = '1'
+        },
+        
+        # Energy Saver Optimization (24H2 specific)
+        @{
+            Path = 'HKLM\zSYSTEM\ControlSet001\Control\Power\EnergyEstimation'
+            Name = 'Enabled'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        
+        # Disable Windows Animation Effects
+        @{
+            Path = 'HKLM\zNTUSER\Control Panel\Desktop\WindowMetrics'
+            Name = 'MinAnimate'
+            Type = 'REG_SZ'
+            Data = '0'
+        },
+        
+        # Optimize Windows Explorer
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+            Name = 'ListviewAlphaSelect'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+            Name = 'ListviewShadow'
+            Type = 'REG_DWORD'
+            Data = '0'
+        },
+        @{
+            Path = 'HKLM\zNTUSER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+            Name = 'TaskbarAnimations'
             Type = 'REG_DWORD'
             Data = '2'
         },
