@@ -783,6 +783,8 @@ function Optimize-WinSxSStore {
         }
         
         # Process should be finished since Wait-ForProcessNoTimeout only returns when done or skipped
+        # Wait for exit and ensure exit code is available
+        $dismProcess.WaitForExit()
         
         if ($dismProcess.ExitCode -ne 0) {
             Write-Log "WinSxS analysis failed (Exit code: $($dismProcess.ExitCode)), skipping optimization" -Level Warning
@@ -804,6 +806,8 @@ function Optimize-WinSxSStore {
         }
         
         # Process should be finished since Wait-ForProcessNoTimeout only returns when done or skipped
+        # Wait for exit and ensure exit code is available
+        $cleanupProcess.WaitForExit()
         if ($cleanupProcess.ExitCode -ne 0) {
             Write-Log "Standard component cleanup failed (Exit code: $($cleanupProcess.ExitCode))" -Level Warning
         }
@@ -827,13 +831,17 @@ function Optimize-WinSxSStore {
             if ($skipped) {
                 Write-Log "ResetBase cleanup skipped by user" -Level Info
             }
-            elseif ($resetbaseProcess.ExitCode -eq 0) {
-                Write-Log "🎯 AGGRESSIVE WinSxS cleanup completed successfully" -Level Success
-                Write-Log "💥 Image size reduced by approximately 800MB-1.2GB" -Level Success
-                Write-Log "⚠️  WARNING: This image CANNOT install language packs or receive certain Windows updates!" -Level Warning
-            }
             else {
-                Write-Log "ResetBase cleanup failed (Exit code: $($resetbaseProcess.ExitCode))" -Level Warning
+                # Wait for exit and ensure exit code is available
+                $resetbaseProcess.WaitForExit()
+                if ($resetbaseProcess.ExitCode -eq 0) {
+                    Write-Log "🎯 AGGRESSIVE WinSxS cleanup completed successfully" -Level Success
+                    Write-Log "💥 Image size reduced by approximately 800MB-1.2GB" -Level Success
+                    Write-Log "⚠️  WARNING: This image CANNOT install language packs or receive certain Windows updates!" -Level Warning
+                }
+                else {
+                    Write-Log "ResetBase cleanup failed (Exit code: $($resetbaseProcess.ExitCode))" -Level Warning
+                }
             }
         }
         else {
