@@ -7,24 +7,34 @@
                 <Enable>false</Enable>
                 <WillShowUI>Never</WillShowUI>
             </DynamicUpdate>
+            <RunSynchronous>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <Description>Skip Windows Activation UI</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\Activation" /v Manual /t REG_DWORD /d 0 /f</Path>
+                </RunSynchronousCommand>
+            </RunSynchronous>
             <ImageInstall>
                 <OSImage>
                     <Compact>true</Compact>
-                    <WillShowUI>OnError</WillShowUI>
+                    <WillShowUI>Never</WillShowUI>
                     <InstallFrom>
                         <MetaData wcm:action="add">
                             <Key>/IMAGE/INDEX</Key>
                             <Value>1</Value>
                         </MetaData>
                     </InstallFrom>
+                    <InstallToAvailablePartition>false</InstallToAvailablePartition>
                 </OSImage>
             </ImageInstall>
             <UserData>
                 <ProductKey>
-                    <WillShowUI>OnError</WillShowUI>
+                    <WillShowUI>Never</WillShowUI>
                     <Key/>
                 </ProductKey>
                 <AcceptEula>true</AcceptEula>
+                <FullName>User</FullName>
+                <Organization>Tiny11 Advanced</Organization>
             </UserData>
             <EnableFirewall>false</EnableFirewall>
             <EnableNetwork>true</EnableNetwork>
@@ -136,6 +146,96 @@
                     <Description>Force Local Account Option</Description>
                     <Path>reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\OOBE" /v DisablePrivacyExperience /t REG_DWORD /d 1 /f</Path>
                 </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>18</Order>
+                    <Description>Skip License Agreement</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\OOBE" /v SetupDisplayedEula /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>19</Order>
+                    <Description>Auto Accept License Terms</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v SoftwareProtectionPlatform /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>20</Order>
+                    <Description>Skip Windows Update Setup</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update" /v EnableFeaturedSoftware /t REG_DWORD /d 0 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>21</Order>
+                    <Description>Disable Windows Welcome Experience</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" /v DisableVoice /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>22</Order>
+                    <Description>Auto Accept Privacy Settings</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" /v PrivacyConsentStatus /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>23</Order>
+                    <Description>Disable UAC</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 0 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>24</Order>
+                    <Description>Disable SmartScreen</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v SmartScreenEnabled /t REG_SZ /d "Off" /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>25</Order>
+                    <Description>Enable Long File Paths</Description>
+                    <Path>reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>26</Order>
+                    <Description>Disable Fast Startup</Description>
+                    <Path>reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d 0 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>27</Order>
+                    <Description>Disable Hibernation</Description>
+                    <Path>powercfg /hibernate off</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>28</Order>
+                    <Description>Disable Pointer Precision</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v MouseAcceleration /t REG_DWORD /d 0 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>29</Order>
+                    <Description>Disable Last Access Time</Description>
+                    <Path>fsutil behavior set DisableLastAccess 1</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>30</Order>
+                    <Description>Set Performance Power Plan</Description>
+                    <Path>powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>31</Order>
+                    <Description>Disable Windows Copilot</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>32</Order>
+                    <Description>Disable VBS (Virtualization Based Security)</Description>
+                    <Path>reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard" /v EnableVirtualizationBasedSecurity /t REG_DWORD /d 0 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>33</Order>
+                    <Description>Disable Windows Error Reporting</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>34</Order>
+                    <Description>Disable Automatic Updates</Description>
+                    <Path>reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v NoAutoUpdate /t REG_DWORD /d 1 /f</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>35</Order>
+                    <Description>Set Network Profile to Private</Description>
+                    <Path>powershell -Command "Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private"</Path>
+                </RunSynchronousCommand>
             </RunSynchronous>
         </component>
         <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -156,10 +256,14 @@
                 <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
                 <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
                 <NetworkLocation>Home</NetworkLocation>
-                <ProtectYourPC>1</ProtectYourPC>
+                <ProtectYourPC>3</ProtectYourPC>
                 <SkipUserOOBE>false</SkipUserOOBE>
                 <SkipMachineOOBE>true</SkipMachineOOBE>
                 <UnattendEnableRetailDemo>false</UnattendEnableRetailDemo>
+                <VMModeOptimizations>
+                    <SkipNotifyUILanguageChange>true</SkipNotifyUILanguageChange>
+                    <SkipWinREInitialization>true</SkipWinREInitialization>
+                </VMModeOptimizations>
             </OOBE>
             <UserAccounts>
                 <LocalAccounts>
@@ -238,6 +342,66 @@
                     <Order>10</Order>
                     <CommandLine>reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v "SubscribedContent-338393Enabled" /t REG_DWORD /d 0 /f</CommandLine>
                     <Description>Disable Suggested Content</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>11</Order>
+                    <CommandLine>powershell.exe -ExecutionPolicy Bypass -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'AutoLogon' -Value 'cmd /c echo Setup Complete'"</CommandLine>
+                    <Description>Auto Complete Setup</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>12</Order>
+                    <CommandLine>reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v "HideFileExt" /t REG_DWORD /d 0 /f</CommandLine>
+                    <Description>Show File Extensions</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>13</Order>
+                    <CommandLine>powershell.exe -ExecutionPolicy Bypass -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'LaunchTo' -Value 1"</CommandLine>
+                    <Description>Open File Explorer to This PC</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>14</Order>
+                    <CommandLine>powershell.exe -ExecutionPolicy Bypass -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'ShowHidden' -Value 1"</CommandLine>
+                    <Description>Show Hidden Files</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>15</Order>
+                    <CommandLine>powershell.exe -ExecutionPolicy Bypass -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'AutoCheckSelect' -Value 0"</CommandLine>
+                    <Description>Disable Auto Check Select</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>16</Order>
+                    <CommandLine>reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v "TaskbarAl" /t REG_DWORD /d 0 /f</CommandLine>
+                    <Description>Left Align Taskbar</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>17</Order>
+                    <CommandLine>powershell.exe -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force"</CommandLine>
+                    <Description>Set PowerShell Execution Policy</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>18</Order>
+                    <CommandLine>powershell.exe -ExecutionPolicy Bypass -Command "Get-NetAdapter | Enable-NetAdapter -Confirm:$false"</CommandLine>
+                    <Description>Enable Network Adapters</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>19</Order>
+                    <CommandLine>powershell.exe -ExecutionPolicy Bypass -Command "Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' -Name 'Hidden' -Value 1"</CommandLine>
+                    <Description>Show System Files</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <Order>20</Order>
+                    <CommandLine>reg add "HKCU\Control Panel\Desktop" /v "MenuShowDelay" /t REG_SZ /d "0" /f</CommandLine>
+                    <Description>Disable Menu Show Delay</Description>
                     <RequiresUserInput>false</RequiresUserInput>
                 </SynchronousCommand>
             </FirstLogonCommands>
